@@ -39,6 +39,7 @@ enum class SortOption(val label: String) {
 }
 
 data class AppSettings(
+    val isDarkTheme: Boolean = true,
     val accentIndex: Int = 0,
     val showFolderDuration: Boolean = false,
     val showNewBadge: Boolean = true,
