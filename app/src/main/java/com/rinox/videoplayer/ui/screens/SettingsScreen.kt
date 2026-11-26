@@ -24,12 +24,12 @@ import com.rinox.videoplayer.data.AppSettings
 import com.rinox.videoplayer.ui.theme.*
 
 val AccentPalette = listOf(
-    Color(0xFF2196F3), // Rinox Blue
-    Color(0xFF00E5FF), // Neon Cyan
-    Color(0xFF00E676), // Emerald Green
-    Color(0xFFFF4081), // Vivid Pink
-    Color(0xFFFF9100), // Amber Orange
-    Color(0xFFB388FF)  // Royal Purple
+    Color(0xFF2196F3),
+    Color(0xFF00E5FF),
+    Color(0xFF00E676),
+    Color(0xFFFF4081),
+    Color(0xFFFF9100),
+    Color(0xFFB388FF)
 )
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,18 +41,22 @@ fun SettingsScreen(
 ) {
     var showPinDialog by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
+    val bgMain = MaterialTheme.colorScheme.background
+    val textMain = MaterialTheme.colorScheme.onBackground
+    val textSub = MaterialTheme.colorScheme.onSurfaceVariant
+    val cardSurface = MaterialTheme.colorScheme.surfaceVariant
 
     Scaffold(
-        containerColor = AmoledBlack,
+        containerColor = bgMain,
         topBar = {
             TopAppBar(
-                title = { Text("Pro Settings", color = TextPrimary, fontWeight = FontWeight.Bold) },
+                title = { Text("Pro Settings", color = textMain, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = textMain)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = AmoledBlack)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = bgMain)
             )
         }
     ) { padding ->
@@ -63,10 +67,16 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. APPEARANCE
             item {
                 SettingsCategoryCard(title = "1. Appearance", icon = Icons.Rounded.Palette) {
-                    Text("Accent Theme Color", color = TextSecondary, fontSize = 13.sp)
+                    SettingSwitchRow(
+                        title = "AMOLED Dark Mode",
+                        subtitle = "Turn off for clean Flagship Light (White) theme",
+                        checked = settings.isDarkTheme,
+                        onCheckedChange = { onUpdateSettings(settings.copy(isDarkTheme = it)) }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("Accent Theme Color", color = textSub, fontSize = 13.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         AccentPalette.forEachIndexed { idx, color ->
@@ -77,7 +87,7 @@ fun SettingsScreen(
                                     .background(color)
                                     .border(
                                         width = if (settings.accentIndex == idx) 3.dp else 0.dp,
-                                        color = Color.White,
+                                        color = textMain,
                                         shape = CircleShape
                                     )
                                     .clickable { onUpdateSettings(settings.copy(accentIndex = idx)) }
@@ -116,22 +126,21 @@ fun SettingsScreen(
                 }
             }
 
-            // 2. MEDIA LIBRARY & PRIVACY
             item {
                 SettingsCategoryCard(title = "2. Media Library & Privacy", icon = Icons.Rounded.Lock) {
                     Button(
                         onClick = onRescanLibrary,
-                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurface),
+                        colors = ButtonDefaults.buttonColors(containerColor = cardSurface),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = null, tint = RinoxCyan)
+                        Icon(Icons.Rounded.Refresh, contentDescription = null, tint = RinoxBlue)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Re-scan Storage Library", color = TextPrimary)
+                        Text("Re-scan Storage Library", color = textMain)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = { pinInput = ""; showPinDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurface),
+                        colors = ButtonDefaults.buttonColors(containerColor = cardSurface),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Rounded.Pin, contentDescription = null, tint = RinoxBlue)
@@ -139,15 +148,14 @@ fun SettingsScreen(
                         Text(
                             if (settings.privacyPin.isEmpty()) "Set Privacy Vault 4-Digit PIN"
                             else "Reset Privacy Vault PIN",
-                            color = TextPrimary
+                            color = textMain
                         )
                     }
                 }
             }
-            // 3. PLAYER
             item {
                 SettingsCategoryCard(title = "3. Player Controls", icon = Icons.Rounded.PlayCircle) {
-                    Text("Tap-to-Seek Step: ${settings.seekStepSeconds}s", color = TextPrimary, fontSize = 14.sp)
+                    Text("Tap-to-Seek Step: ${settings.seekStepSeconds}s", color = textMain, fontSize = 14.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(5, 10, 15, 30).forEach { sec ->
                             FilterChip(
@@ -172,10 +180,9 @@ fun SettingsScreen(
                 }
             }
 
-            // 4. DECODER
             item {
                 SettingsCategoryCard(title = "4. Hybrid Decoder Engine", icon = Icons.Rounded.Memory) {
-                    Text("Default Decoder Priority: ${settings.defaultDecoder}", color = TextPrimary, fontSize = 14.sp)
+                    Text("Default Decoder Priority: ${settings.defaultDecoder}", color = textMain, fontSize = 14.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("HW", "HW+", "SW").forEach { mode ->
                             FilterChip(
@@ -194,7 +201,6 @@ fun SettingsScreen(
                 }
             }
 
-            // 5. AUDIO
             item {
                 SettingsCategoryCard(title = "5. Audio & Headphone", icon = Icons.Rounded.Headphones) {
                     SettingSwitchRow(
@@ -210,7 +216,6 @@ fun SettingsScreen(
                 }
             }
 
-            // 6. SUBTITLE
             item {
                 SettingsCategoryCard(title = "6. Subtitle Engine", icon = Icons.Rounded.Subtitles) {
                     SettingSwitchRow(
@@ -219,7 +224,7 @@ fun SettingsScreen(
                         checked = settings.autoLoadSubtitles,
                         onCheckedChange = { onUpdateSettings(settings.copy(autoLoadSubtitles = it)) }
                     )
-                    Text("Subtitle Font Size: ${settings.subFontSize}sp", color = TextPrimary, fontSize = 14.sp)
+                    Text("Subtitle Font Size: ${settings.subFontSize}sp", color = textMain, fontSize = 14.sp)
                     Slider(
                         value = settings.subFontSize.toFloat(),
                         onValueChange = { onUpdateSettings(settings.copy(subFontSize = it.toInt())) },
@@ -228,11 +233,10 @@ fun SettingsScreen(
                 }
             }
 
-            // 7. ABOUT
             item {
                 SettingsCategoryCard(title = "7. About Rinox Player", icon = Icons.Rounded.Info) {
-                    Text("Rinox Player v1.0.0 (64-Bit ARM64)", color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                    Text("100% Offline • Zero Internet • AMOLED Engine", color = TextSecondary, fontSize = 13.sp)
+                    Text("Rinox Player v1.0.0 (64-Bit ARM64)", color = textMain, fontWeight = FontWeight.SemiBold)
+                    Text("100% Offline • Zero-Load Engine • AMOLED & Light", color = textSub, fontSize = 13.sp)
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -242,8 +246,7 @@ fun SettingsScreen(
     if (showPinDialog) {
         AlertDialog(
             onDismissRequest = { showPinDialog = false },
-            containerColor = DarkCard,
-            title = { Text("Set 4-Digit Privacy PIN", color = TextPrimary) },
+            title = { Text("Set 4-Digit Privacy PIN") },
             text = {
                 OutlinedTextField(
                     value = pinInput,
@@ -260,10 +263,10 @@ fun SettingsScreen(
                             showPinDialog = false
                         }
                     }
-                ) { Text("Save PIN", color = RinoxCyan) }
+                ) { Text("Save PIN", color = RinoxBlue) }
             },
             dismissButton = {
-                TextButton(onClick = { showPinDialog = false }) { Text("Cancel", color = TextSecondary) }
+                TextButton(onClick = { showPinDialog = false }) { Text("Cancel") }
             }
         )
     }
@@ -276,7 +279,7 @@ private fun SettingsCategoryCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -284,7 +287,7 @@ private fun SettingsCategoryCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, contentDescription = null, tint = RinoxBlue, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(title, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(title, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(12.dp))
             content()
@@ -306,9 +309,9 @@ private fun SettingSwitchRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(title, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             if (subtitle != null) {
-                Text(subtitle, color = TextSecondary, fontSize = 12.sp)
+                Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
