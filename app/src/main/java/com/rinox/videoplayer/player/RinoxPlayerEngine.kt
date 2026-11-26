@@ -48,6 +48,7 @@ class RinoxPlayerEngine(private val context: Context) {
         release()
         activeDecoderMode = decoderMode
 
+        // HW = Hardware, HW+ = Hybrid (HW Video + FFmpeg 5.1 Audio), SW = Full FFmpeg 10-bit/5.1
         val extMode = when (decoderMode) {
             "SW" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
             "HW+" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
@@ -63,7 +64,12 @@ class RinoxPlayerEngine(private val context: Context) {
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        val selector = DefaultTrackSelector(context)
+        val selector = DefaultTrackSelector(context).apply {
+            parameters = buildUponParameters()
+                .setPreferredTextLanguage("en")
+                .setSelectUndeterminedTextLanguage(true)
+                .build()
+        }
         trackSelector = selector
 
         val audioAttrs = AudioAttributes.Builder()
@@ -101,11 +107,33 @@ class RinoxPlayerEngine(private val context: Context) {
         exoPlayer = player
         return player
     }
-    fun prepareMedia(uri: Uri, videoPath: String, startPositionMs: Long, autoLoadSubtitles: Boolean) {
+    fun prepareMedia(
+        uri: Uri,
+        videoPath: String,
+        startPositionMs: Long,
+        autoLoadSubtitles: Boolean,
+        customSubUri: Uri? = null,
+        customSubName: String? = null
+    ) {
         val player = exoPlayer ?: return
         val subConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
 
-        if (autoLoadSubtitles && videoPath.isNotEmpty()) {
+        if (customSubUri != null) {
+            val lower = (customSubName ?: customSubUri.toString()).lowercase()
+            val mime = when {
+                lower.endsWith(".vtt") -> MimeTypes.TEXT_VTT
+                lower.endsWith(".ass") || lower.endsWith(".ssa") -> MimeTypes.TEXT_SSA
+                else -> MimeTypes.APPLICATION_SUBRIP
+            }
+            subConfigs.add(
+                MediaItem.SubtitleConfiguration.Builder(customSubUri)
+                    .setMimeType(mime)
+                    .setLanguage("en")
+                    .setLabel(customSubName ?: "Selected Subtitle")
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT or C.SELECTION_FLAG_FORCED)
+                    .build()
+            )
+        } else if (autoLoadSubtitles && videoPath.isNotEmpty()) {
             try {
                 val videoFile = File(videoPath)
                 val parent = videoFile.parentFile
@@ -118,18 +146,24 @@ class RinoxPlayerEngine(private val context: Context) {
                 )
                 subMap.forEach { (ext, mime) ->
                     val subFile = File(parent, "$base.$ext")
-                    if (subFile.exists()) {
+                    if (subFile.exists() && subFile.canRead()) {
                         subConfigs.add(
                             MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(subFile))
                                 .setMimeType(mime)
                                 .setLanguage("en")
                                 .setLabel("External ${ext.uppercase()}")
-                                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT or C.SELECTION_FLAG_FORCED)
                                 .build()
                         )
                     }
                 }
             } catch (_: Exception) {}
+        }
+
+        trackSelector?.let { sel ->
+            sel.parameters = sel.buildUponParameters()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .build()
         }
 
         val mediaItem = MediaItem.Builder()
