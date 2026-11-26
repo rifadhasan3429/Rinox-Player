@@ -1,38 +1,24 @@
 package com.rinox.videoplayer.player
 
 import android.content.Context
-import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
-import androidx.annotation.OptIn
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.SeekParameters
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import org.videolan.libvlc.LibVLC
+import org.videolan.libvlc.Media
+import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
 
 data class TrackInfoItem(
-    val id: String,
+    val id: Int,
     val label: String,
-    val groupIndex: Int,
-    val trackIndex: Int,
     val isSelected: Boolean
 )
-@OptIn(UnstableApi::class)
 class RinoxPlayerEngine(private val context: Context) {
 
-    var exoPlayer: ExoPlayer? = null
+    private var libVLC: LibVLC? = null
+    var mediaPlayer: MediaPlayer? = null
         private set
-    private var trackSelector: DefaultTrackSelector? = null
-    private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var equalizer: MediaPlayer.Equalizer? = null
     var activeDecoderMode: String = "HW"
         private set
 
@@ -40,182 +26,183 @@ class RinoxPlayerEngine(private val context: Context) {
         decoderMode: String,
         onErrorFallback: (String) -> Unit,
         onVideoEnded: () -> Unit,
-        onTracksChanged: () -> Unit
-    ): ExoPlayer {
+        onTimeChanged: (Long, Long) -> Unit,
+        onTracksUpdated: () -> Unit
+    ): MediaPlayer {
         release()
         activeDecoderMode = decoderMode
 
-        val extensionMode = when (decoderMode) {
-            "SW" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
-            "HW+" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-            else -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-        }
+        val options = arrayListOf(
+            "--no-drop-late-frames",
+            "--no-skip-frames",
+            "--file-caching=300",
+            "--network-caching=300",
+            "--aout=opensles",
+            "--audio-time-stretch"
+        )
 
-        val renderersFactory = DefaultRenderersFactory(context)
-            .setExtensionRendererMode(extensionMode)
-            .setEnableDecoderFallback(true)
+        val vlc = LibVLC(context, options)
+        libVLC = vlc
+        val player = MediaPlayer(vlc)
 
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(1500, 15000, 500, 1000)
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
-
-        val selector = DefaultTrackSelector(context)
-        trackSelector = selector
-
-        val audioAttrs = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-            .build()
-
-        val player = ExoPlayer.Builder(context, renderersFactory)
-            .setTrackSelector(selector)
-            .setLoadControl(loadControl)
-            .setAudioAttributes(audioAttrs, true)
-            .setHandleAudioBecomingNoisy(true)
-            .setSeekParameters(SeekParameters.CLOSEST_SYNC)
-            .build()
-
-        player.addListener(object : Player.Listener {
-            override fun onPlayerError(error: PlaybackException) {
-                if (activeDecoderMode != "SW") {
-                    onErrorFallback("SW")
+        player.setEventListener { event ->
+            when (event.type) {
+                MediaPlayer.Event.EncounteredError -> {
+                    if (activeDecoderMode != "SW") {
+                        onErrorFallback("SW")
+                    }
                 }
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) {
+                MediaPlayer.Event.EndReached -> {
                     onVideoEnded()
                 }
+                MediaPlayer.Event.TimeChanged -> {
+                    onTimeChanged(player.time, player.length)
+                }
+                MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected -> {
+                    onTracksUpdated()
+                }
             }
+        }
 
-            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
-                onTracksChanged()
-            }
-        })
-
-        exoPlayer = player
+        mediaPlayer = player
         return player
     }
-    fun prepareMedia(uri: Uri, videoPath: String, startPositionMs: Long, autoLoadSubtitles: Boolean) {
-        val player = exoPlayer ?: return
-        val subConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
 
-        if (autoLoadSubtitles) {
+    fun attachVideoLayout(layout: VLCVideoLayout) {
+        try {
+            mediaPlayer?.attachViews(layout, null, true, false)
+        } catch (_: Exception) {}
+    }
+
+    fun detachVideoLayout() {
+        try {
+            mediaPlayer?.detachViews()
+        } catch (_: Exception) {}
+    }
+    fun prepareMedia(uri: Uri, videoPath: String, startPositionMs: Long, autoLoadSubtitles: Boolean) {
+        val vlc = libVLC ?: return
+        val player = mediaPlayer ?: return
+
+        val media = if (videoPath.isNotEmpty() && File(videoPath).exists()) {
+            Media(vlc, videoPath)
+        } else {
+            Media(vlc, uri)
+        }
+
+        when (activeDecoderMode) {
+            "SW" -> media.setHWDecoderEnabled(false, false)
+            "HW+" -> media.setHWDecoderEnabled(true, false)
+            else -> media.setHWDecoderEnabled(true, true)
+        }
+
+        if (autoLoadSubtitles && videoPath.isNotEmpty()) {
             try {
                 val videoFile = File(videoPath)
                 val parent = videoFile.parentFile
                 val base = videoFile.nameWithoutExtension
-                val subMap = mapOf(
-                    "srt" to MimeTypes.APPLICATION_SUBRIP,
-                    "vtt" to MimeTypes.TEXT_VTT,
-                    "ass" to MimeTypes.TEXT_SSA,
-                    "ssa" to MimeTypes.TEXT_SSA
-                )
-                subMap.forEach { (ext, mime) ->
+                listOf("srt", "ass", "ssa", "sub", "vtt").forEach { ext ->
                     val subFile = File(parent, "$base.$ext")
                     if (subFile.exists()) {
-                        subConfigs.add(
-                            MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(subFile))
-                                .setMimeType(mime)
-                                .setLanguage("en")
-                                .setLabel("External ${ext.uppercase()}")
-                                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                                .build()
-                        )
+                        media.addSlave(Media.Slave(Media.Slave.Type.Subtitle, 4, Uri.fromFile(subFile)))
                     }
                 }
             } catch (_: Exception) {}
         }
 
-        val mediaItem = MediaItem.Builder()
-            .setUri(uri)
-            .setSubtitleConfigurations(subConfigs)
-            .build()
+        player.media = media
+        media.release()
+        player.play()
 
-        player.setMediaItem(mediaItem)
         if (startPositionMs > 0L) {
-            player.seekTo(startPositionMs)
+            player.time = startPositionMs
         }
-        player.prepare()
-        player.playWhenReady = true
     }
 
-    fun applySafeAudioBoost(volumePercent: Int) {
-        val player = exoPlayer ?: return
+    fun applySafeVolume(volumePercent: Int) {
         try {
-            if (volumePercent <= 100) {
-                player.volume = (volumePercent / 100f).coerceIn(0f, 1f)
-                loudnessEnhancer?.enabled = false
-            } else {
-                player.volume = 1.0f
-                val sessionId = player.audioSessionId
-                if (sessionId != C.AUDIO_SESSION_ID_UNSET && sessionId != 0) {
-                    if (loudnessEnhancer == null) {
-                        loudnessEnhancer = LoudnessEnhancer(sessionId)
-                    }
-                    // Safe gain cap (1200 mB = +12dB) prevents speaker distortion
-                    val boostLevel = ((volumePercent - 100) * 12).coerceIn(0, 1200)
-                    loudnessEnhancer?.setTargetGain(boostLevel)
-                    loudnessEnhancer?.enabled = true
-                }
-            }
+            // LibVLC supports clean 0% to 200% amplification natively without speaker clipping
+            mediaPlayer?.volume = volumePercent.coerceIn(0, 200)
         } catch (_: Exception) {}
     }
 
-    fun getTracks(trackType: @C.TrackType Int): List<TrackInfoItem> {
-        val player = exoPlayer ?: return emptyList()
-        val result = mutableListOf<TrackInfoItem>()
-        player.currentTracks.groups.forEachIndexed { gIdx, group ->
-            if (group.type == trackType) {
-                for (tIdx in 0 until group.length) {
-                    val format = group.getTrackFormat(tIdx)
-                    val label = format.label ?: format.language ?: "Track ${result.size + 1}"
-                    result.add(
-                        TrackInfoItem(
-                            id = "$gIdx-$tIdx",
-                            label = label,
-                            groupIndex = gIdx,
-                            trackIndex = tIdx,
-                            isSelected = group.isTrackSelected(tIdx)
-                        )
-                    )
+    fun applyEqualizerPreset(presetIndex: Int, customBands: FloatArray? = null) {
+        val player = mediaPlayer ?: return
+        try {
+            if (presetIndex < 0 && customBands == null) {
+                player.setEqualizer(null)
+                equalizer = null
+                return
+            }
+            val eq = if (presetIndex >= 0 && presetIndex < MediaPlayer.Equalizer.getPresetCount()) {
+                MediaPlayer.Equalizer.createFromPreset(presetIndex)
+            } else {
+                MediaPlayer.Equalizer.create()
+            }
+            customBands?.forEachIndexed { idx, amp ->
+                if (idx < MediaPlayer.Equalizer.getBandCount()) {
+                    eq.setAmp(idx, amp.coerceIn(-20f, 20f))
                 }
             }
-        }
-        return result
+            equalizer = eq
+            player.setEqualizer(eq)
+        } catch (_: Exception) {}
     }
 
-    fun selectTrack(trackType: @C.TrackType Int, groupIndex: Int, trackIndex: Int) {
-        val player = exoPlayer ?: return
-        val selector = trackSelector ?: return
-        val groups = player.currentTracks.groups
-        if (groupIndex in groups.indices) {
-            val targetGroup = groups[groupIndex].mediaTrackGroup
-            selector.parameters = selector.buildUponParameters()
-                .setTrackTypeDisabled(trackType, false)
-                .setOverrideForType(TrackSelectionOverride(targetGroup, trackIndex))
-                .build()
+    fun getEqualizerPresets(): List<String> {
+        return try {
+            val count = MediaPlayer.Equalizer.getPresetCount()
+            (0 until count).map { MediaPlayer.Equalizer.getPresetName(it) }
+        } catch (_: Exception) {
+            listOf("Flat", "Bass Boost", "Cinema", "Pop", "Rock", "Vocal")
         }
     }
 
-    fun disableTrackType(trackType: @C.TrackType Int) {
-        val selector = trackSelector ?: return
-        selector.parameters = selector.buildUponParameters()
-            .setTrackTypeDisabled(trackType, true)
-            .build()
+    fun getAudioTracks(): List<TrackInfoItem> {
+        val player = mediaPlayer ?: return emptyList()
+        val current = player.audioTrack
+        return player.audioTracks?.map {
+            TrackInfoItem(id = it.id, label = it.name ?: "Track ${it.id}", isSelected = it.id == current)
+        } ?: emptyList()
+    }
+
+    fun getSubtitleTracks(): List<TrackInfoItem> {
+        val player = mediaPlayer ?: return emptyList()
+        val current = player.spuTrack
+        return player.spuTracks?.map {
+            TrackInfoItem(id = it.id, label = it.name ?: "Sub ${it.id}", isSelected = it.id == current)
+        } ?: emptyList()
+    }
+
+    fun selectAudioTrack(id: Int) {
+        try { mediaPlayer?.audioTrack = id } catch (_: Exception) {}
+    }
+
+    fun selectSubtitleTrack(id: Int) {
+        try { mediaPlayer?.spuTrack = id } catch (_: Exception) {}
+    }
+
+    fun setAspectRatioMode(modeIndex: Int) {
+        val player = mediaPlayer ?: return
+        try {
+            when (modeIndex) {
+                0 -> { player.aspectRatio = null; player.scale = 0f } // Fit
+                1 -> { player.aspectRatio = "16:9"; player.scale = 0f } // Stretch
+                2 -> { player.aspectRatio = null; player.scale = 1.35f } // Zoom/Crop
+                else -> { player.aspectRatio = null; player.scale = 1.0f } // 100%
+            }
+        } catch (_: Exception) {}
     }
 
     fun release() {
         try {
-            loudnessEnhancer?.enabled = false
-            loudnessEnhancer?.release()
-            loudnessEnhancer = null
+            mediaPlayer?.stop()
+            mediaPlayer?.detachViews()
+            mediaPlayer?.release()
+            mediaPlayer = null
         } catch (_: Exception) {}
         try {
-            exoPlayer?.stop()
-            exoPlayer?.release()
-            exoPlayer = null
+            libVLC?.release()
+            libVLC = null
         } catch (_: Exception) {}
     }
 }
