@@ -2,6 +2,7 @@ package com.rinox.videoplayer
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.Display
@@ -11,7 +12,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,7 +26,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Sort
@@ -36,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -44,14 +49,19 @@ import com.rinox.videoplayer.ui.components.FolderItemCard
 import com.rinox.videoplayer.ui.components.VideoItemCard
 import com.rinox.videoplayer.ui.screens.AccentPalette
 import com.rinox.videoplayer.ui.screens.SettingsScreen
+import com.rinox.videoplayer.ui.screens.VideoPlayerScreen
 import com.rinox.videoplayer.ui.theme.*
 import com.rinox.videoplayer.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
+    private var isInPipMode by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         Thread.setDefaultUncaughtExceptionHandler { _, t -> t.printStackTrace() }
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         enableMaxRefreshRate()
         setContent {
@@ -65,6 +75,7 @@ class MainActivity : ComponentActivity() {
                     RinoxMainApp(
                         settings = settings,
                         settingsManager = settingsManager,
+                        isInPipMode = isInPipMode,
                         onUpdateSettings = { updated ->
                             settings = updated
                             settingsManager.saveSettings(updated)
@@ -73,6 +84,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isInPipMode = isInPictureInPictureMode
     }
 
     private fun enableMaxRefreshRate() {
@@ -93,6 +109,7 @@ private enum class BrowserScreen { FOLDERS, FOLDER_VIDEOS, ALL_VIDEOS, PRIVACY_V
 fun RinoxMainApp(
     settings: AppSettings,
     settingsManager: SettingsManager,
+    isInPipMode: Boolean,
     onUpdateSettings: (AppSettings) -> Unit
 ) {
     val context = LocalContext.current
@@ -128,6 +145,17 @@ fun RinoxMainApp(
     var pinInput by remember { mutableStateOf("") }
     var propertiesVideo by remember { mutableStateOf<VideoItem?>(null) }
 
+    // Active Video Player State
+    var activePlaylist by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
+    var activePlayIndex by remember { mutableIntStateOf(-1) }
+
+    // Brief 2.5s Creator Signature on App Launch
+    var showCreatorBadge by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(2500L)
+        showCreatorBadge = false
+    }
+
     fun reloadVideos(force: Boolean = false) {
         if (!hasPermission) return
         scope.launch {
@@ -142,6 +170,22 @@ fun RinoxMainApp(
         if (allVideos.isEmpty()) reloadVideos(force = false)
     }
 
+    if (activePlaylist.isNotEmpty() && activePlayIndex >= 0) {
+        VideoPlayerScreen(
+            playlist = activePlaylist,
+            initialIndex = activePlayIndex,
+            settings = settings,
+            settingsManager = settingsManager,
+            accentColor = accentColor,
+            isInPipMode = isInPipMode,
+            onClose = {
+                activePlaylist = emptyList()
+                activePlayIndex = -1
+                reloadVideos(force = false)
+            }
+        )
+        return
+    }
     BackHandler(enabled = currentScreen != BrowserScreen.FOLDERS || searchActive) {
         when {
             searchActive -> { searchActive = false; searchQuery = "" }
@@ -174,6 +218,7 @@ fun RinoxMainApp(
         )
         return
     }
+
     val sortedVideos = remember(allVideos, sortOption, searchQuery) {
         val filtered = if (searchQuery.isBlank()) allVideos
         else allVideos.filter { it.displayName.contains(searchQuery, ignoreCase = true) }
@@ -226,7 +271,28 @@ fun RinoxMainApp(
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
-                        Text(topTitle, color = textMain, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                        Column {
+                            Text(
+                                text = topTitle,
+                                color = textMain,
+                                fontSize = if (topTitle.length > 18) 16.sp else 21.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            AnimatedVisibility(
+                                visible = showCreatorBadge && currentScreen == BrowserScreen.FOLDERS,
+                                enter = fadeIn(),
+                                exit = fadeOut()
+                            ) {
+                                Text(
+                                    text = "Crafted by Rifad Hasan",
+                                    color = accentColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 },
                 navigationIcon = {
@@ -238,26 +304,28 @@ fun RinoxMainApp(
                 },
                 actions = {
                     IconButton(onClick = { searchActive = !searchActive; if (!searchActive) searchQuery = "" }) {
-                        Icon(if (searchActive) Icons.Rounded.Close else Icons.Rounded.Search, contentDescription = "Search", tint = textMain, modifier = Modifier.size(22.dp))
+                        Icon(if (searchActive) Icons.Rounded.Close else Icons.Rounded.Search, contentDescription = "Search", tint = textMain, modifier = Modifier.size(21.dp))
                     }
-                    IconButton(onClick = { onUpdateSettings(settings.copy(isDarkTheme = !settings.isDarkTheme)) }) {
-                        Icon(
-                            if (settings.isDarkTheme) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                            contentDescription = "Theme",
-                            tint = textMain,
-                            modifier = Modifier.size(21.dp)
-                        )
-                    }
-                    IconButton(onClick = { onUpdateSettings(settings.copy(isGridView = !settings.isGridView)) }) {
-                        Icon(
-                            if (settings.isGridView) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
-                            contentDescription = "Toggle View",
-                            tint = textMain,
-                            modifier = Modifier.size(21.dp)
-                        )
+                    if (currentScreen == BrowserScreen.FOLDERS) {
+                        IconButton(onClick = { onUpdateSettings(settings.copy(isDarkTheme = !settings.isDarkTheme)) }) {
+                            Icon(
+                                if (settings.isDarkTheme) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                                contentDescription = "Theme",
+                                tint = textMain,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        IconButton(onClick = { onUpdateSettings(settings.copy(isGridView = !settings.isGridView)) }) {
+                            Icon(
+                                if (settings.isGridView) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                                contentDescription = "Toggle View",
+                                tint = textMain,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                     IconButton(onClick = { currentScreen = BrowserScreen.SETTINGS }) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = textMain, modifier = Modifier.size(21.dp))
+                        Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = textMain, modifier = Modifier.size(20.dp))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = bgMain)
@@ -267,12 +335,10 @@ fun RinoxMainApp(
             FloatingActionButton(
                 onClick = {
                     val lastPath = settingsManager.getLastPlayedPath()
-                    val target = allVideos.find { it.path == lastPath } ?: allVideos.firstOrNull()
-                    if (target != null) {
-                        settingsManager.markVideoWatched(target.path)
-                        settingsManager.saveLastPlayedPath(target.path)
-                        reloadVideos(force = true)
-                        Toast.makeText(context, "Ready for Phase 3 Player: ${target.displayName}", Toast.LENGTH_SHORT).show()
+                    val idx = sortedVideos.indexOfFirst { it.path == lastPath }
+                    if (sortedVideos.isNotEmpty()) {
+                        activePlaylist = sortedVideos
+                        activePlayIndex = if (idx >= 0) idx else 0
                     }
                 },
                 containerColor = accentColor,
@@ -325,6 +391,7 @@ fun RinoxMainApp(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
             }
+
             if (currentScreen == BrowserScreen.FOLDERS && searchQuery.isBlank()) {
                 if (settings.isGridView) {
                     LazyVerticalGrid(
@@ -353,16 +420,15 @@ fun RinoxMainApp(
             } else {
                 val listToShow = if (currentScreen == BrowserScreen.FOLDERS) sortedVideos else activeVideoList
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(listToShow, key = { it.path }) { video ->
+                    items(listToShow.size) { index ->
+                        val video = listToShow[index]
                         VideoItemCard(
                             video = video,
                             settings = settings,
                             accentColor = accentColor,
                             onPlayClick = {
-                                settingsManager.markVideoWatched(video.path)
-                                settingsManager.saveLastPlayedPath(video.path)
-                                reloadVideos(force = true)
-                                Toast.makeText(context, "Ready for Phase 3 Player: ${video.displayName}", Toast.LENGTH_SHORT).show()
+                                activePlaylist = listToShow
+                                activePlayIndex = index
                             },
                             onMenuAction = { action ->
                                 when (action) {
