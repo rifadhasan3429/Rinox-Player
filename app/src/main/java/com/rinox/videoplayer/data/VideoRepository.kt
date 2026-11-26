@@ -14,6 +14,11 @@ class VideoRepository(
     private val context: Context,
     private val settingsManager: SettingsManager
 ) {
+    companion object {
+        private var cachedVideos: List<VideoItem>? = null
+        private var cachedPrivate: List<VideoItem>? = null
+    }
+
     private val privateVaultDir: File by lazy {
         File(context.filesDir, "rinox_private_vault").apply {
             if (!exists()) mkdirs()
@@ -22,7 +27,13 @@ class VideoRepository(
         }
     }
 
-    fun scanAllVideos(): List<VideoItem> {
+    fun getInstantCachedVideos(): List<VideoItem> = cachedVideos ?: emptyList()
+    fun getInstantCachedPrivate(): List<VideoItem> = cachedPrivate ?: emptyList()
+
+    fun scanAllVideos(forceRefresh: Boolean = false): List<VideoItem> {
+        if (!forceRefresh && cachedVideos != null) {
+            return cachedVideos!!
+        }
         val videoList = mutableListOf<VideoItem>()
         val excluded = settingsManager.getExcludedFolders()
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -90,7 +101,7 @@ class VideoRepository(
                             mimeType = cursor.getString(mimeCol) ?: "video/mp4",
                             dateAdded = cursor.getLong(dateCol),
                             uri = uri,
-                            fps = extractVideoFps(path),
+                            fps = getFastVideoFps(path),
                             hasSubtitle = subs.isNotEmpty(),
                             subtitleTypes = subs,
                             isNew = !settingsManager.isVideoWatched(path),
@@ -102,6 +113,7 @@ class VideoRepository(
         } catch (e: Exception) {
             e.printStackTrace()
         }
+        cachedVideos = videoList
         return videoList
     }
     fun getPrivateVideos(): List<VideoItem> {
@@ -124,7 +136,7 @@ class VideoRepository(
                     mimeType = "video/mp4",
                     dateAdded = file.lastModified() / 1000L,
                     uri = Uri.fromFile(file),
-                    fps = extractVideoFps(file.absolutePath),
+                    fps = getFastVideoFps(file.absolutePath),
                     hasSubtitle = subs.isNotEmpty(),
                     subtitleTypes = subs,
                     isNew = !settingsManager.isVideoWatched(file.absolutePath),
@@ -132,6 +144,7 @@ class VideoRepository(
                 )
             )
         }
+        cachedPrivate = list
         return list
     }
 
@@ -143,9 +156,9 @@ class VideoRepository(
             source.copyTo(dest, overwrite = true)
             source.delete()
             context.contentResolver.delete(video.uri, null, null)
+            cachedVideos = null
             true
         } catch (e: Exception) {
-            e.printStackTrace()
             false
         }
     }
@@ -157,9 +170,9 @@ class VideoRepository(
             val dest = File(moviesDir, source.name)
             source.copyTo(dest, overwrite = true)
             source.delete()
+            cachedVideos = null
             true
         } catch (e: Exception) {
-            e.printStackTrace()
             false
         }
     }
@@ -171,6 +184,7 @@ class VideoRepository(
             if (!video.isPrivate) {
                 context.contentResolver.delete(video.uri, null, null)
             }
+            cachedVideos = null
             true
         } catch (e: Exception) {
             false
@@ -186,7 +200,9 @@ class VideoRepository(
         }.map { it.uppercase(Locale.US) }
     }
 
-    private fun extractVideoFps(path: String): Int {
+    private fun getFastVideoFps(path: String): Int {
+        val saved = settingsManager.getCachedFps(path)
+        if (saved > 0) return saved
         val extractor = MediaExtractor()
         return try {
             extractor.setDataSource(path)
@@ -194,9 +210,12 @@ class VideoRepository(
                 val format = extractor.getTrackFormat(i)
                 val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
                 if (mime.startsWith("video/") && format.containsKey(MediaFormat.KEY_FRAME_RATE)) {
-                    return format.getInteger(MediaFormat.KEY_FRAME_RATE)
+                    val fps = format.getInteger(MediaFormat.KEY_FRAME_RATE)
+                    settingsManager.cacheFps(path, fps)
+                    return fps
                 }
             }
+            settingsManager.cacheFps(path, 30)
             30
         } catch (_: Exception) {
             30
