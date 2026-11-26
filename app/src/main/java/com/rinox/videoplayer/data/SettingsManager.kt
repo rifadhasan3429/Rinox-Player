@@ -9,6 +9,7 @@ class SettingsManager(context: Context) {
 
     fun loadSettings(): AppSettings {
         return AppSettings(
+            isDarkTheme = prefs.getBoolean("isDarkTheme", true),
             accentIndex = prefs.getInt("accentIndex", 0),
             showFolderDuration = prefs.getBoolean("showFolderDuration", false),
             showNewBadge = prefs.getBoolean("showNewBadge", true),
@@ -35,6 +36,7 @@ class SettingsManager(context: Context) {
 
     fun saveSettings(s: AppSettings) {
         prefs.edit().apply {
+            putBoolean("isDarkTheme", s.isDarkTheme)
             putInt("accentIndex", s.accentIndex)
             putBoolean("showFolderDuration", s.showFolderDuration)
             putBoolean("showNewBadge", s.showNewBadge)
@@ -59,6 +61,14 @@ class SettingsManager(context: Context) {
             apply()
         }
     }
+    fun getCachedFps(path: String): Int {
+        return prefs.getInt("fps_$path", -1)
+    }
+
+    fun cacheFps(path: String, fps: Int) {
+        prefs.edit().putInt("fps_$path", fps).apply()
+    }
+
     fun isVideoWatched(path: String): Boolean {
         return prefs.getBoolean("watched_$path", false)
     }
