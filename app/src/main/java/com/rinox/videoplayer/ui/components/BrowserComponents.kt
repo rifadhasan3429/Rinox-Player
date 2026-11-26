@@ -66,21 +66,19 @@ fun FlagshipFolderIcon(
             val h = size.height
             val r = w * 0.14f
 
-            // Back tab
             val tabPath = Path().apply {
                 moveTo(0f, h * 0.22f)
-                quadraticTo(0f, h * 0.10f, r, h * 0.10f)
+                quadraticBezierTo(0f, h * 0.10f, r, h * 0.10f)
                 lineTo(w * 0.38f, h * 0.10f)
                 lineTo(w * 0.48f, h * 0.22f)
                 lineTo(w - r, h * 0.22f)
-                quadraticTo(w, h * 0.22f, w, h * 0.22f + r)
+                quadraticBezierTo(w, h * 0.22f, w, h * 0.22f + r)
                 lineTo(w, h * 0.50f)
                 lineTo(0f, h * 0.50f)
                 close()
             }
             drawPath(path = tabPath, color = backColor)
 
-            // Front sleek rounded body
             drawRoundRect(
                 brush = Brush.verticalGradient(listOf(frontTop, frontBottom)),
                 topLeft = Offset(0f, h * 0.24f),
