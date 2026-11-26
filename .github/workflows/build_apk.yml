@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,8 +34,18 @@ jobs:
       - name: Build Release APK
         run: gradle assembleRelease --stacktrace
 
-      - name: Upload Rinox Player Release APK
-        uses: actions/upload-artifact@v4
+      - name: Rename APK for Release
+        run: mv app/build/outputs/apk/release/app-release.apk Rinox-Player-v1.0.0-arm64.apk
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
         with:
-          name: Rinox-Player-Release-APK
-          path: app/build/outputs/apk/release/app-release.apk
+          tag_name: v1.0.${{ github.run_number }}
+          name: Rinox Player v1.0.${{ github.run_number }} (64-Bit Offline Pro)
+          body: |
+            ### Rinox Player - Official Release
+            - **100% Offline 4K Hybrid Engine (HW / HW+ / SW FFmpeg)**
+            - **Zero-Load Instant Cache & 120Hz/144Hz Support**
+            - **PiP Mode, Smart Portrait/Landscape & Privacy Vault**
+            - *Crafted by Rifad Hasan*
+          files: Rinox-Player-v1.0.0-arm64.apk
