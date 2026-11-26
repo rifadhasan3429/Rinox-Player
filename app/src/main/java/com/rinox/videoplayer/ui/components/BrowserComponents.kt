@@ -324,8 +324,7 @@ fun VideoItemCard(
             }
             DropdownMenu(
                 expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-                containerColor = DarkCard
+                onDismissRequest = { menuExpanded = false }
             ) {
                 DropdownMenuItem(
                     text = { Text("Properties", color = TextPrimary) },
