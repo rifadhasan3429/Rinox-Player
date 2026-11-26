@@ -9,10 +9,14 @@ android {
 
     defaultConfig {
         applicationId = "com.rinox.videoplayer"
-        minSdk = 24
+        minSdk = 29
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
 
         vectorDrawables {
             useSupportLibrary = true
