@@ -13,6 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -32,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,8 +60,8 @@ class MainActivity : ComponentActivity() {
             var settings by remember { mutableStateOf(settingsManager.loadSettings()) }
             val accentColor = AccentPalette.getOrElse(settings.accentIndex) { RinoxBlue }
 
-            RinoxPlayerTheme(accentColor = accentColor) {
-                Surface(modifier = Modifier.fillMaxSize(), color = AmoledBlack) {
+            RinoxPlayerTheme(darkTheme = settings.isDarkTheme, accentColor = accentColor) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     RinoxMainApp(
                         settings = settings,
                         settingsManager = settingsManager,
@@ -97,6 +99,9 @@ fun RinoxMainApp(
     val scope = rememberCoroutineScope()
     val repository = remember { VideoRepository(context, settingsManager) }
     val accentColor = AccentPalette.getOrElse(settings.accentIndex) { RinoxBlue }
+    val bgMain = MaterialTheme.colorScheme.background
+    val textMain = MaterialTheme.colorScheme.onBackground
+    val textSub = MaterialTheme.colorScheme.onSurfaceVariant
 
     val requiredPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.READ_MEDIA_VIDEO
@@ -111,8 +116,8 @@ fun RinoxMainApp(
         hasPermission = it
     }
 
-    var allVideos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
-    var privateVideos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
+    var allVideos by remember { mutableStateOf(repository.getInstantCachedVideos()) }
+    var privateVideos by remember { mutableStateOf(repository.getInstantCachedPrivate()) }
     var currentScreen by remember { mutableStateOf(BrowserScreen.FOLDERS) }
     var selectedFolderPath by remember { mutableStateOf("") }
     var sortOption by remember { mutableStateOf(SortOption.DATE) }
@@ -123,17 +128,19 @@ fun RinoxMainApp(
     var pinInput by remember { mutableStateOf("") }
     var propertiesVideo by remember { mutableStateOf<VideoItem?>(null) }
 
-    fun reloadVideos() {
+    fun reloadVideos(force: Boolean = false) {
         if (!hasPermission) return
         scope.launch {
-            val scanned = withContext(Dispatchers.IO) { repository.scanAllVideos() }
+            val scanned = withContext(Dispatchers.IO) { repository.scanAllVideos(forceRefresh = force) }
             val priv = withContext(Dispatchers.IO) { repository.getPrivateVideos() }
             allVideos = scanned
             privateVideos = priv
         }
     }
 
-    LaunchedEffect(hasPermission) { reloadVideos() }
+    LaunchedEffect(hasPermission) {
+        if (allVideos.isEmpty()) reloadVideos(force = false)
+    }
 
     BackHandler(enabled = currentScreen != BrowserScreen.FOLDERS || searchActive) {
         when {
@@ -145,9 +152,9 @@ fun RinoxMainApp(
     if (!hasPermission) {
         Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Rinox Player", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Text("Rinox Player", color = textMain, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(12.dp))
-                Text("Grant storage permission to load your offline videos.", color = TextSecondary)
+                Text("Grant storage permission to load your offline videos.", color = textSub)
                 Spacer(modifier = Modifier.height(20.dp))
                 Button(
                     onClick = { permLauncher.launch(requiredPermission) },
@@ -162,7 +169,7 @@ fun RinoxMainApp(
         SettingsScreen(
             settings = settings,
             onUpdateSettings = onUpdateSettings,
-            onRescanLibrary = { reloadVideos(); Toast.makeText(context, "Library Rescanned", Toast.LENGTH_SHORT).show() },
+            onRescanLibrary = { reloadVideos(force = true); Toast.makeText(context, "Library Rescanned", Toast.LENGTH_SHORT).show() },
             onBack = { currentScreen = BrowserScreen.FOLDERS }
         )
         return
@@ -198,15 +205,15 @@ fun RinoxMainApp(
     }
 
     val topTitle = when (currentScreen) {
-        BrowserScreen.FOLDERS -> "Rinox Player"
+        BrowserScreen.FOLDERS -> "Folders"
         BrowserScreen.FOLDER_VIDEOS -> folders.find { it.path == selectedFolderPath }?.name ?: "Folder"
         BrowserScreen.ALL_VIDEOS -> "All Videos (${sortedVideos.size})"
         BrowserScreen.PRIVACY_VAULT -> "Privacy Vault (${privateVideos.size})"
-        else -> "Rinox Player"
+        else -> "Folders"
     }
 
     Scaffold(
-        containerColor = AmoledBlack,
+        containerColor = bgMain,
         topBar = {
             TopAppBar(
                 title = {
@@ -219,32 +226,41 @@ fun RinoxMainApp(
                             modifier = Modifier.fillMaxWidth()
                         )
                     } else {
-                        Text(topTitle, color = TextPrimary, fontWeight = FontWeight.Bold)
+                        Text(topTitle, color = textMain, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                     }
                 },
                 navigationIcon = {
                     if (currentScreen != BrowserScreen.FOLDERS) {
                         IconButton(onClick = { currentScreen = BrowserScreen.FOLDERS }) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = textMain)
                         }
                     }
                 },
                 actions = {
                     IconButton(onClick = { searchActive = !searchActive; if (!searchActive) searchQuery = "" }) {
-                        Icon(if (searchActive) Icons.Rounded.Close else Icons.Rounded.Search, contentDescription = "Search", tint = TextPrimary)
+                        Icon(if (searchActive) Icons.Rounded.Close else Icons.Rounded.Search, contentDescription = "Search", tint = textMain, modifier = Modifier.size(22.dp))
+                    }
+                    IconButton(onClick = { onUpdateSettings(settings.copy(isDarkTheme = !settings.isDarkTheme)) }) {
+                        Icon(
+                            if (settings.isDarkTheme) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                            contentDescription = "Theme",
+                            tint = textMain,
+                            modifier = Modifier.size(21.dp)
+                        )
                     }
                     IconButton(onClick = { onUpdateSettings(settings.copy(isGridView = !settings.isGridView)) }) {
                         Icon(
                             if (settings.isGridView) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
                             contentDescription = "Toggle View",
-                            tint = TextPrimary
+                            tint = textMain,
+                            modifier = Modifier.size(21.dp)
                         )
                     }
                     IconButton(onClick = { currentScreen = BrowserScreen.SETTINGS }) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = TextPrimary)
+                        Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = textMain, modifier = Modifier.size(21.dp))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = AmoledBlack)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = bgMain)
             )
         },
         floatingActionButton = {
@@ -255,7 +271,7 @@ fun RinoxMainApp(
                     if (target != null) {
                         settingsManager.markVideoWatched(target.path)
                         settingsManager.saveLastPlayedPath(target.path)
-                        reloadVideos()
+                        reloadVideos(force = true)
                         Toast.makeText(context, "Ready for Phase 3 Player: ${target.displayName}", Toast.LENGTH_SHORT).show()
                     }
                 },
@@ -269,32 +285,30 @@ fun RinoxMainApp(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (currentScreen == BrowserScreen.FOLDERS) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FilterChip(
-                        selected = false,
+                    SleekPillChip(
+                        icon = Icons.Rounded.Lock,
+                        label = "Privacy",
                         onClick = {
                             if (settings.privacyPin.isEmpty()) {
                                 Toast.makeText(context, "Set 4-Digit PIN in Settings > Media Library first", Toast.LENGTH_LONG).show()
                             } else {
                                 pinInput = ""; showPinPrompt = true
                             }
-                        },
-                        leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        label = { Text("Privacy") }
+                        }
                     )
-                    FilterChip(
-                        selected = false,
-                        onClick = { currentScreen = BrowserScreen.ALL_VIDEOS },
-                        label = { Text("All Videos") }
+                    SleekPillChip(
+                        icon = Icons.Rounded.VideoLibrary,
+                        label = "All Videos",
+                        onClick = { currentScreen = BrowserScreen.ALL_VIDEOS }
                     )
                     Box {
-                        FilterChip(
-                            selected = false,
-                            onClick = { sortMenuOpen = true },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                            label = { Text("Sort: ${sortOption.label}") }
+                        SleekPillChip(
+                            icon = Icons.AutoMirrored.Rounded.Sort,
+                            label = sortOption.label,
+                            onClick = { sortMenuOpen = true }
                         )
                         DropdownMenu(
                             expanded = sortMenuOpen,
@@ -302,13 +316,14 @@ fun RinoxMainApp(
                         ) {
                             SortOption.entries.forEach { opt ->
                                 DropdownMenuItem(
-                                    text = { Text(opt.label, color = TextPrimary) },
+                                    text = { Text(opt.label) },
                                     onClick = { sortOption = opt; sortMenuOpen = false }
                                 )
                             }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
             }
             if (currentScreen == BrowserScreen.FOLDERS && searchQuery.isBlank()) {
                 if (settings.isGridView) {
@@ -346,7 +361,7 @@ fun RinoxMainApp(
                             onPlayClick = {
                                 settingsManager.markVideoWatched(video.path)
                                 settingsManager.saveLastPlayedPath(video.path)
-                                reloadVideos()
+                                reloadVideos(force = true)
                                 Toast.makeText(context, "Ready for Phase 3 Player: ${video.displayName}", Toast.LENGTH_SHORT).show()
                             },
                             onMenuAction = { action ->
@@ -355,11 +370,11 @@ fun RinoxMainApp(
                                     "privacy" -> scope.launch(Dispatchers.IO) {
                                         if (video.isPrivate) repository.unhideFromPrivacy(video)
                                         else repository.moveToPrivacy(video)
-                                        withContext(Dispatchers.Main) { reloadVideos() }
+                                        withContext(Dispatchers.Main) { reloadVideos(force = true) }
                                     }
                                     "delete" -> scope.launch(Dispatchers.IO) {
                                         repository.deleteVideo(video)
-                                        withContext(Dispatchers.Main) { reloadVideos() }
+                                        withContext(Dispatchers.Main) { reloadVideos(force = true) }
                                     }
                                 }
                             }
@@ -373,8 +388,7 @@ fun RinoxMainApp(
     if (showPinPrompt) {
         AlertDialog(
             onDismissRequest = { showPinPrompt = false },
-            containerColor = DarkCard,
-            title = { Text("Enter Privacy PIN", color = TextPrimary) },
+            title = { Text("Enter Privacy PIN") },
             text = {
                 OutlinedTextField(
                     value = pinInput,
@@ -394,7 +408,7 @@ fun RinoxMainApp(
                 }) { Text("Unlock", color = accentColor) }
             },
             dismissButton = {
-                TextButton(onClick = { showPinPrompt = false }) { Text("Cancel", color = TextSecondary) }
+                TextButton(onClick = { showPinPrompt = false }) { Text("Cancel") }
             }
         )
     }
@@ -402,21 +416,50 @@ fun RinoxMainApp(
     propertiesVideo?.let { v ->
         AlertDialog(
             onDismissRequest = { propertiesVideo = null },
-            containerColor = DarkCard,
-            title = { Text("Video Properties", color = TextPrimary) },
+            title = { Text("Video Properties") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("File: ${v.displayName}", color = TextPrimary, fontSize = 13.sp)
-                    Text("Resolution: ${v.width} x ${v.height}", color = TextSecondary, fontSize = 13.sp)
-                    Text("Frame Rate: ${v.fps} FPS", color = RinoxCyan, fontSize = 13.sp)
-                    Text("Size: ${FormatUtils.formatSize(v.sizeBytes)}", color = TextSecondary, fontSize = 13.sp)
-                    Text("Duration: ${FormatUtils.formatDuration(v.durationMs)}", color = TextSecondary, fontSize = 13.sp)
-                    Text("Path: ${v.path}", color = TextSecondary, fontSize = 12.sp)
+                    Text("File: ${v.displayName}", fontSize = 13.sp)
+                    Text("Resolution: ${v.width} x ${v.height}", fontSize = 13.sp)
+                    Text("Frame Rate: ${v.fps} FPS", color = accentColor, fontSize = 13.sp)
+                    Text("Size: ${FormatUtils.formatSize(v.sizeBytes)}", fontSize = 13.sp)
+                    Text("Duration: ${FormatUtils.formatDuration(v.durationMs)}", fontSize = 13.sp)
+                    Text("Path: ${v.path}", fontSize = 12.sp)
                 }
             },
             confirmButton = {
                 TextButton(onClick = { propertiesVideo = null }) { Text("Close", color = accentColor) }
             }
+        )
+    }
+}
+
+@Composable
+private fun SleekPillChip(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+            .clickable { onClick() }
+            .padding(horizontal = 11.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(13.dp)
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
         )
     }
 }
