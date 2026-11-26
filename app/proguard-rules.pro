@@ -1,9 +1,9 @@
-# Protect Media3 ExoPlayer & NextLib FFmpeg Native JNI from R8 Obfuscation
+# Protect Media3 ExoPlayer & Jellyfin FFmpeg 10-bit/5.1 Decoder from R8 Obfuscation
 -keep class androidx.media3.** { *; }
--keep class io.github.anilbeesetti.nextlib.** { *; }
--keepclassmembers class io.github.anilbeesetti.nextlib.** { *; }
+-keep class org.jellyfin.media3.** { *; }
+-keepclassmembers class org.jellyfin.media3.** { *; }
 -dontwarn androidx.media3.**
--dontwarn io.github.anilbeesetti.nextlib.**
+-dontwarn org.jellyfin.media3.**
 
 # Keep Kotlin & Coroutines metadata
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
