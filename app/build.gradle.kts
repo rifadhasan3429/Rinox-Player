@@ -95,7 +95,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Media3 ExoPlayer + Official Jellyfin FFmpeg 10-Bit & 5.1 AC3/EAC3/DTS Decoder
+    // 100% Google Official Maven Central Media3 Engine
     val media3Version = "1.4.1"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
@@ -103,5 +103,4 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
-    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.4.1+1")
 }
