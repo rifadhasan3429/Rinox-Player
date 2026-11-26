@@ -95,6 +95,11 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Official VideoLAN LibVLC All-In-One FFmpeg Codec Engine
-    implementation("org.videolan.android:libvlc-all:3.6.0-eap5")
+    // True Hardware + Hybrid HW+ + Software FFmpeg Engine (Zero-Delay Seek & MX-Style Performance)
+    val media3Version = "1.4.1"
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-ui:$media3Version")
+    implementation("androidx.media3:media3-common:$media3Version")
+    implementation("androidx.media3:media3-session:$media3Version")
+    implementation("io.github.anilbeesetti:nextlib-media3ext:0.8.2")
 }
