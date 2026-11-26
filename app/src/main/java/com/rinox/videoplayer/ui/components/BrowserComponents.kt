@@ -1,6 +1,7 @@
 package com.rinox.videoplayer.ui.components
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,7 +15,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -26,10 +32,76 @@ import androidx.compose.ui.unit.sp
 import com.rinox.videoplayer.data.AppSettings
 import com.rinox.videoplayer.data.VideoFolder
 import com.rinox.videoplayer.data.VideoItem
-import com.rinox.videoplayer.ui.theme.*
+import com.rinox.videoplayer.ui.theme.RinoxCyan
 import com.rinox.videoplayer.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+@Composable
+fun FlagshipFolderIcon(
+    folderName: String,
+    accentColor: Color,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val subIcon: ImageVector? = remember(folderName) {
+        val lower = folderName.lowercase()
+        when {
+            lower.contains("camera") || lower.contains("dcim") -> Icons.Rounded.PhotoCamera
+            lower.contains("movie") || lower.contains("film") -> Icons.Rounded.Movie
+            lower.contains("whatsapp") -> Icons.Rounded.ChatBubbleOutline
+            lower.contains("download") -> Icons.Rounded.ArrowDownward
+            lower.contains("screen") -> Icons.Rounded.Smartphone
+            else -> null
+        }
+    }
+
+    val backColor = if (isDark) accentColor.copy(alpha = 0.55f) else Color(0xFFCFD8DC)
+    val frontTop = if (isDark) accentColor else Color(0xFFE3E8EE)
+    val frontBottom = if (isDark) accentColor.copy(alpha = 0.82f) else Color(0xFFD5DCE4)
+    val watermarkTint = if (isDark) Color.Black.copy(alpha = 0.35f) else Color(0xFF90A4AE)
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize().padding(3.dp)) {
+            val w = size.width
+            val h = size.height
+            val r = w * 0.14f
+
+            // Back tab
+            val tabPath = Path().apply {
+                moveTo(0f, h * 0.22f)
+                quadraticTo(0f, h * 0.10f, r, h * 0.10f)
+                lineTo(w * 0.38f, h * 0.10f)
+                lineTo(w * 0.48f, h * 0.22f)
+                lineTo(w - r, h * 0.22f)
+                quadraticTo(w, h * 0.22f, w, h * 0.22f + r)
+                lineTo(w, h * 0.50f)
+                lineTo(0f, h * 0.50f)
+                close()
+            }
+            drawPath(path = tabPath, color = backColor)
+
+            // Front sleek rounded body
+            drawRoundRect(
+                brush = Brush.verticalGradient(listOf(frontTop, frontBottom)),
+                topLeft = Offset(0f, h * 0.24f),
+                size = Size(w, h * 0.68f),
+                cornerRadius = CornerRadius(r, r)
+            )
+        }
+
+        if (subIcon != null) {
+            Icon(
+                imageVector = subIcon,
+                contentDescription = null,
+                tint = watermarkTint,
+                modifier = Modifier
+                    .size(20.dp)
+                    .offset(y = 4.dp)
+            )
+        }
+    }
+}
+
 @Composable
 fun FolderItemCard(
     folder: VideoFolder,
@@ -37,51 +109,34 @@ fun FolderItemCard(
     accentColor: Color,
     onClick: () -> Unit
 ) {
-    val subIcon: ImageVector = remember(folder.name) {
-        val lower = folder.name.lowercase()
-        when {
-            lower.contains("camera") || lower.contains("dcim") -> Icons.Rounded.PhotoCamera
-            lower.contains("movie") || lower.contains("film") -> Icons.Rounded.Movie
-            lower.contains("whatsapp") -> Icons.Rounded.Chat
-            lower.contains("download") -> Icons.Rounded.Download
-            lower.contains("screen") -> Icons.Rounded.Screenshot
-            else -> Icons.Rounded.VideoLibrary
-        }
-    }
+    val textMain = MaterialTheme.colorScheme.onBackground
+    val textSub = MaterialTheme.colorScheme.onSurfaceVariant
+    val cardBg = MaterialTheme.colorScheme.surface
 
     if (settings.isGridView) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onClick() },
-            colors = CardDefaults.cardColors(containerColor = DarkCard),
-            shape = RoundedCornerShape(14.dp)
+            colors = CardDefaults.cardColors(containerColor = cardBg),
+            shape = RoundedCornerShape(16.dp)
         ) {
             Column(
                 modifier = Modifier.padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(modifier = Modifier.size(72.dp)) {
-                    Icon(
-                        imageVector = Icons.Rounded.Folder,
-                        contentDescription = null,
-                        tint = accentColor,
+                Box(modifier = Modifier.size(68.dp)) {
+                    FlagshipFolderIcon(
+                        folderName = folder.name,
+                        accentColor = accentColor,
+                        isDark = settings.isDarkTheme,
                         modifier = Modifier.fillMaxSize()
-                    )
-                    Icon(
-                        imageVector = subIcon,
-                        contentDescription = null,
-                        tint = AmoledBlack,
-                        modifier = Modifier
-                            .size(22.dp)
-                            .align(Alignment.Center)
-                            .offset(y = 3.dp)
                     )
                     if (settings.showNewBadge && folder.newCount > 0) {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .size(22.dp)
+                                .size(20.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFFE53935)),
                             contentAlignment = Alignment.Center
@@ -89,7 +144,7 @@ fun FolderItemCard(
                             Text(
                                 text = "${folder.newCount}",
                                 color = Color.White,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -114,7 +169,7 @@ fun FolderItemCard(
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = folder.name,
-                    color = TextPrimary,
+                    color = textMain,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -122,7 +177,7 @@ fun FolderItemCard(
                 )
                 Text(
                     text = "${folder.videos.size} videos",
-                    color = TextSecondary,
+                    color = textSub,
                     fontSize = 12.sp
                 )
             }
@@ -132,30 +187,21 @@ fun FolderItemCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onClick() }
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.size(64.dp)) {
-                Icon(
-                    imageVector = Icons.Rounded.Folder,
-                    contentDescription = null,
-                    tint = accentColor,
+            Box(modifier = Modifier.size(60.dp)) {
+                FlagshipFolderIcon(
+                    folderName = folder.name,
+                    accentColor = accentColor,
+                    isDark = settings.isDarkTheme,
                     modifier = Modifier.fillMaxSize()
-                )
-                Icon(
-                    imageVector = subIcon,
-                    contentDescription = null,
-                    tint = AmoledBlack,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .align(Alignment.Center)
-                        .offset(y = 3.dp)
                 )
                 if (settings.showNewBadge && folder.newCount > 0) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .size(20.dp)
+                            .size(19.dp)
                             .clip(CircleShape)
                             .background(Color(0xFFE53935)),
                         contentAlignment = Alignment.Center
@@ -189,17 +235,17 @@ fun FolderItemCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = folder.name,
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    color = textMain,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "${folder.videos.size} videos",
-                    color = TextSecondary,
-                    fontSize = 13.sp
+                    color = textSub,
+                    fontSize = 12.sp
                 )
             }
         }
@@ -216,6 +262,9 @@ fun VideoItemCard(
     val context = LocalContext.current
     var thumbBitmap by remember(video.path) { mutableStateOf<Bitmap?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
+    val textMain = MaterialTheme.colorScheme.onBackground
+    val textSub = MaterialTheme.colorScheme.onSurfaceVariant
+    val pillBg = MaterialTheme.colorScheme.surfaceVariant
 
     LaunchedEffect(video.path) {
         thumbBitmap = withContext(Dispatchers.IO) {
@@ -234,8 +283,8 @@ fun VideoItemCard(
             modifier = Modifier
                 .width(116.dp)
                 .height(68.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(DarkCard)
+                .clip(RoundedCornerShape(10.dp))
+                .background(pillBg)
         ) {
             if (thumbBitmap != null) {
                 Image(
@@ -248,8 +297,8 @@ fun VideoItemCard(
                 Icon(
                     imageVector = Icons.Rounded.Movie,
                     contentDescription = null,
-                    tint = TextSecondary,
-                    modifier = Modifier.align(Alignment.Center).size(28.dp)
+                    tint = textSub,
+                    modifier = Modifier.align(Alignment.Center).size(26.dp)
                 )
             }
             if (settings.showNewBadge && video.isNew) {
@@ -288,7 +337,7 @@ fun VideoItemCard(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = video.displayName,
-                color = TextPrimary,
+                color = textMain,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
@@ -304,15 +353,15 @@ fun VideoItemCard(
                 if (settings.showVideoSize) {
                     BadgePill(
                         text = FormatUtils.formatSize(video.sizeBytes),
-                        bgColor = DarkCard,
+                        bgColor = pillBg,
                         textColor = accentColor
                     )
                 }
                 if (settings.showVideoFps) {
                     BadgePill(
                         text = "${video.fps} FPS",
-                        bgColor = DarkCard,
-                        textColor = RinoxCyan
+                        bgColor = pillBg,
+                        textColor = if (settings.isDarkTheme) RinoxCyan else accentColor
                     )
                 }
             }
@@ -320,22 +369,19 @@ fun VideoItemCard(
 
         Box {
             IconButton(onClick = { menuExpanded = true }) {
-                Icon(Icons.Rounded.MoreVert, contentDescription = "Options", tint = TextSecondary)
+                Icon(Icons.Rounded.MoreVert, contentDescription = "Options", tint = textSub)
             }
             DropdownMenu(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("Properties", color = TextPrimary) },
+                    text = { Text("Properties") },
                     onClick = { menuExpanded = false; onMenuAction("properties") }
                 )
                 DropdownMenuItem(
                     text = {
-                        Text(
-                            if (video.isPrivate) "Unhide from Privacy" else "Move to Privacy",
-                            color = TextPrimary
-                        )
+                        Text(if (video.isPrivate) "Unhide from Privacy" else "Move to Privacy")
                     },
                     onClick = { menuExpanded = false; onMenuAction("privacy") }
                 )
