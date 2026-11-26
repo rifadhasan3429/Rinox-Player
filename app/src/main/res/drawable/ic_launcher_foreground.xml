@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://android.com"
+    xmlns:aapt="http://android.com"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer Subtle Tech Ring -->
+    <path
+        android:pathData="M54,24 A30,30 0 1,1 53.99,24 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#2196F3"
+        android:strokeAlpha="0.35" />
+
+    <!-- Main Premium Play Triangle -->
+    <path android:pathData="M43,36 L73,54 L43,72 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="43"
+                android:startY="36"
+                android:endX="73"
+                android:endY="72"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00E5FF" />
+                <item android:offset="0.5" android:color="#2196F3" />
+                <item android:offset="1.0" android:color="#1565C0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Sleek Left Accent Bar (Forms 'R' & Pro Player Feel) -->
+    <path
+        android:pathData="M36,36 L39.5,36 L39.5,72 L36,72 Z"
+        android:fillColor="#00E5FF" />
+</vector>
