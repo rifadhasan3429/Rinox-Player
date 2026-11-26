@@ -3,20 +3,25 @@ package com.rinox.videoplayer
 import android.Manifest
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Color as AndroidColor
 import android.os.Build
 import android.os.Bundle
 import android.view.Display
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,9 +41,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,7 +69,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Thread.setDefaultUncaughtExceptionHandler { _, t -> t.printStackTrace() }
-        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         enableMaxRefreshRate()
         setContent {
@@ -69,6 +76,21 @@ class MainActivity : ComponentActivity() {
             val settingsManager = remember { SettingsManager(context) }
             var settings by remember { mutableStateOf(settingsManager.loadSettings()) }
             val accentColor = AccentPalette.getOrElse(settings.accentIndex) { RinoxBlue }
+
+            // Dynamic Status Bar & Navigation Bar Icon Contrast Fix
+            LaunchedEffect(settings.isDarkTheme) {
+                if (settings.isDarkTheme) {
+                    enableEdgeToEdge(
+                        statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+                        navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT)
+                    )
+                } else {
+                    enableEdgeToEdge(
+                        statusBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+                        navigationBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+                    )
+                }
+            }
 
             RinoxPlayerTheme(darkTheme = settings.isDarkTheme, accentColor = accentColor) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -145,14 +167,15 @@ fun RinoxMainApp(
     var pinInput by remember { mutableStateOf("") }
     var propertiesVideo by remember { mutableStateOf<VideoItem?>(null) }
 
-    // Active Video Player State
     var activePlaylist by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
     var activePlayIndex by remember { mutableIntStateOf(-1) }
 
-    // Brief 2.5s Creator Signature on App Launch
-    var showCreatorBadge by remember { mutableStateOf(true) }
+    // Flagship Animated Signature State
+    var showCreatorBadge by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(2500L)
+        delay(180L)
+        showCreatorBadge = true
+        delay(2800L)
         showCreatorBadge = false
     }
 
@@ -282,15 +305,10 @@ fun RinoxMainApp(
                             )
                             AnimatedVisibility(
                                 visible = showCreatorBadge && currentScreen == BrowserScreen.FOLDERS,
-                                enter = fadeIn(),
-                                exit = fadeOut()
+                                enter = fadeIn(tween(500)) + slideInVertically(tween(500)) { it / 2 } + expandHorizontally(tween(600)),
+                                exit = fadeOut(tween(700))
                             ) {
-                                Text(
-                                    text = "Crafted by Rifad Hasan",
-                                    color = accentColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                ShimmerCreatorTag(accentColor = accentColor)
                             }
                         }
                     }
@@ -498,6 +516,34 @@ fun RinoxMainApp(
             }
         )
     }
+}
+
+@Composable
+private fun ShimmerCreatorTag(accentColor: Color) {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val shift by transition.animateFloat(
+        initialValue = -150f,
+        targetValue = 450f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerShift"
+    )
+    val brush = Brush.linearGradient(
+        colors = listOf(accentColor, Color.White, RinoxCyan, accentColor),
+        start = Offset(shift, 0f),
+        end = Offset(shift + 140f, 30f)
+    )
+    Text(
+        text = "Crafted by Rifad Hasan",
+        style = TextStyle(
+            brush = brush,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.5.sp
+        )
+    )
 }
 
 @Composable
