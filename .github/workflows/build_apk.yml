@@ -31,21 +31,27 @@ jobs:
         run: |
           keytool -genkey -v -keystore app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias rinox -storepass rinox1234 -keypass rinox1234 -dname "CN=RinoxPlayer, OU=Dev, O=Rinox, L=Dhaka, S=Dhaka, C=BD"
 
-      - name: Build Release APK
+      - name: Build Release APKs
         run: gradle assembleRelease --stacktrace
 
-      - name: Rename APK for Release
-        run: mv app/build/outputs/apk/release/app-release.apk Rinox-Player-v1.0.0-arm64.apk
+      - name: Prepare Split Release APKs
+        run: |
+          mkdir -p release_apks
+          cp app/build/outputs/apk/release/*arm64-v8a*.apk release_apks/Rinox-Player-v1.0.0-arm64-v8a.apk
+          cp app/build/outputs/apk/release/*armeabi-v7a*.apk release_apks/Rinox-Player-v1.0.0-armeabi-v7a.apk
 
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Rinox Player v1.0.${{ github.run_number }} (64-Bit Offline Pro)
+          name: Rinox Player v1.0.${{ github.run_number }} (Offline Pro)
           body: |
             ### Rinox Player - Official Release
-            - **100% Offline 4K Hybrid Engine (HW / HW+ / SW FFmpeg)**
-            - **Zero-Load Instant Cache & 120Hz/144Hz Support**
-            - **PiP Mode, Smart Portrait/Landscape & Privacy Vault**
+            - **`Rinox-Player-v1.0.0-arm64-v8a.apk`**: For modern 64-bit Android phones (Recommended)
+            - **`Rinox-Player-v1.0.0-armeabi-v7a.apk`**: For older 32-bit Android phones
+            - **LibVLC All-In-One FFmpeg Engine + 10-Band Audio Equalizer**
+            - **Zero-Load Instant Cache, PiP Mode & Smart Portrait/Landscape**
             - *Crafted by Rifad Hasan*
-          files: Rinox-Player-v1.0.0-arm64.apk
+          files: |
+            release_apks/Rinox-Player-v1.0.0-arm64-v8a.apk
+            release_apks/Rinox-Player-v1.0.0-armeabi-v7a.apk
