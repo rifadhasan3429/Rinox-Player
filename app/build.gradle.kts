@@ -14,12 +14,17 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
-        }
-
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
         }
     }
 
@@ -69,6 +74,10 @@ android {
     }
 
     packaging {
+        jniLibs {
+            useLegacyPackaging = false
+            excludes += listOf("**/x86/**", "**/x86_64/**")
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
@@ -86,6 +95,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Official VideoLAN LibVLC 64-Bit All-In-One FFmpeg Codec Engine (Like MX Player Pro & VLC)
+    // Official VideoLAN LibVLC All-In-One FFmpeg Codec Engine
     implementation("org.videolan.android:libvlc-all:3.6.0-eap5")
 }
