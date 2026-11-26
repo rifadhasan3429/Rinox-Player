@@ -6,18 +6,24 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.graphics.Color as AndroidColor
 import android.media.AudioManager
+import android.net.Uri
 import android.os.Build
 import android.util.Rational
 import android.util.TypedValue
+import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -88,11 +94,24 @@ fun VideoPlayerScreen(
     var durationMs by remember { mutableLongStateOf(currentVideo.durationMs.coerceAtLeast(1L)) }
     var controlsVisible by remember { mutableStateOf(true) }
     var isLocked by remember { mutableStateOf(false) }
+    var lockIconVisible by remember { mutableStateOf(false) }
     var backgroundPlayEnabled by remember { mutableStateOf(false) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     var is2xHolding by remember { mutableStateOf(false) }
 
-    // True Aspect Ratio Modes
+    // Custom Subtitle File Picker (.srt / .ass / .vtt)
+    var customSubUri by remember { mutableStateOf<Uri?>(null) }
+    var customSubName by remember { mutableStateOf<String?>(null) }
+    val subPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            customSubUri = uri
+            customSubName = uri.lastPathSegment ?: "External Subtitle"
+            val resumeAt = engine.exoPlayer?.currentPosition ?: currentPosMs
+            engine.prepareMedia(currentVideo.uri, currentVideo.path, resumeAt, true, customSubUri, customSubName)
+            Toast.makeText(context, "Subtitle Loaded!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val aspectModes = listOf(
         AspectRatioFrameLayout.RESIZE_MODE_FIT to "Fit",
         AspectRatioFrameLayout.RESIZE_MODE_FILL to "Stretch",
@@ -101,22 +120,16 @@ fun VideoPlayerScreen(
     )
     var aspectIndex by remember { mutableIntStateOf(0) }
 
-    // Pinch-to-Zoom & Pan State
     var zoomScale by remember { mutableFloatStateOf(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
-
-    // Pinch-to-Resize Subtitle Font Size
     var dynamicSubSizeSp by remember { mutableFloatStateOf(settings.subFontSize.toFloat()) }
-
-    // Live FPS State
     var liveFps by remember { mutableIntStateOf(currentVideo.fps.coerceAtLeast(24)) }
 
     var accumulatedSeekSec by remember { mutableIntStateOf(0) }
     var lastTapTimestamp by remember { mutableLongStateOf(0L) }
     var hudText by remember { mutableStateOf<String?>(null) }
 
-    // Silky-Smooth Float Brightness & Volume
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxSystemVol = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
     var smoothVolume by remember {
@@ -131,9 +144,9 @@ fun VideoPlayerScreen(
     var selectedEqPreset by remember { mutableIntStateOf(-1) }
     var audioTracks by remember { mutableStateOf<List<TrackInfoItem>>(emptyList()) }
     var subTracks by remember { mutableStateOf<List<TrackInfoItem>>(emptyList()) }
-    // Smart Auto-Orientation: Reels/TikTok stays Portrait, Movies go Landscape
     LaunchedEffect(currentVideo.path) {
         zoomScale = 1f; panX = 0f; panY = 0f
+        customSubUri = null; customSubName = null
         liveFps = currentVideo.fps.coerceAtLeast(24)
         activity?.requestedOrientation = if (currentVideo.height > currentVideo.width && currentVideo.width > 0) {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
@@ -142,7 +155,14 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Immersive Full-Screen
+    // Auto-fade glassmorphic lock button after 2 seconds so zero stain remains on video
+    LaunchedEffect(isLocked, lockIconVisible) {
+        if (isLocked && lockIconVisible) {
+            delay(2000L)
+            lockIconVisible = false
+        }
+    }
+
     DisposableEffect(Unit) {
         val window = activity?.window
         if (window != null) {
@@ -163,7 +183,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // PiP-Safe Lifecycle Observer (Never mutes or pauses in PiP Mode!)
     DisposableEffect(lifecycleOwner, backgroundPlayEnabled) {
         val observer = LifecycleEventObserver { _, event ->
             val inPip = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -178,7 +197,6 @@ fun VideoPlayerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Build & Prepare True Hybrid Player
     LaunchedEffect(currentVideo.path, decoderMode) {
         val savedPos = if (settings.resumePlayback) {
             context.getSharedPreferences("rinox_positions", Context.MODE_PRIVATE)
@@ -203,13 +221,12 @@ fun VideoPlayerScreen(
                 if (detectedFps > 0) liveFps = detectedFps
             }
         )
-        engine.prepareMedia(currentVideo.uri, currentVideo.path, savedPos, settings.autoLoadSubtitles)
+        engine.prepareMedia(currentVideo.uri, currentVideo.path, savedPos, settings.autoLoadSubtitles, customSubUri, customSubName)
         engine.applySmoothVolume(smoothVolume.roundToInt())
         if (selectedEqPreset >= 0) engine.applyEqualizerPreset(selectedEqPreset)
         settingsManager.markVideoWatched(currentVideo.path)
         settingsManager.saveLastPlayedPath(currentVideo.path)
     }
-    // Fast 200ms Live Progress & Live FPS Monitor
     LaunchedEffect(currentVideo.path) {
         while (true) {
             delay(200L)
@@ -239,7 +256,7 @@ fun VideoPlayerScreen(
 
     BackHandler {
         if (isLocked) {
-            Toast.makeText(context, "Unlock screen first", Toast.LENGTH_SHORT).show()
+            lockIconVisible = true
         } else {
             engine.release()
             onClose()
@@ -247,7 +264,6 @@ fun VideoPlayerScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // Hardware-Accelerated Video Surface with Pinch-to-Zoom & Dynamic Captions
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -255,10 +271,13 @@ fun VideoPlayerScreen(
                     setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     resizeMode = aspectModes[aspectIndex].first
                     subtitleView?.apply {
+                        visibility = View.VISIBLE
+                        setApplyEmbeddedStyles(true)
+                        setApplyEmbeddedFontSizes(false)
                         setStyle(
                             CaptionStyleCompat(
                                 AndroidColor.WHITE,
-                                AndroidColor.argb(140, 0, 0, 0),
+                                AndroidColor.argb(110, 0, 0, 0),
                                 AndroidColor.TRANSPARENT,
                                 CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
                                 AndroidColor.BLACK,
@@ -275,6 +294,7 @@ fun VideoPlayerScreen(
                     view.player = engine.exoPlayer
                 }
                 view.resizeMode = aspectModes[aspectIndex].first
+                view.subtitleView?.visibility = View.VISIBLE
                 view.subtitleView?.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, dynamicSubSizeSp)
             },
             modifier = Modifier
@@ -286,14 +306,23 @@ fun VideoPlayerScreen(
                     translationY = panY
                 )
         )
+        if (isLocked && !isInPipMode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { lockIconVisible = !lockIconVisible })
+                    }
+            )
+        }
+
         if (!isLocked && !isInPipMode) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // 2-Finger Pinch-to-Zoom (Video) & Pinch-to-Resize (Subtitles on bottom 30%)
                     .pointerInput(Unit) {
                         detectTransformGestures { centroid, pan, zoom, _ ->
-                            if (zoom != 1f || pan.x != 0f || pan.y != 0f) {
+                            if (zoom != 1f || (zoomScale > 1.02f && (pan.x != 0f || pan.y != 0f))) {
                                 val h = size.height.toFloat().coerceAtLeast(1f)
                                 if (centroid.y > h * 0.72f && zoomScale <= 1.05f && zoom != 1f) {
                                     dynamicSubSizeSp = (dynamicSubSizeSp * zoom).coerceIn(12f, 42f)
@@ -312,7 +341,6 @@ fun VideoPlayerScreen(
                             }
                         }
                     }
-                    // Tap, 100-Tap Seek & 2.0X Long-Press
                     .pointerInput(currentVideo.path, settings.seekStepSeconds) {
                         detectTapGestures(
                             onTap = { offset ->
@@ -374,55 +402,72 @@ fun VideoPlayerScreen(
                             }
                         )
                     }
-                    // Silky-Smooth Float Brightness, Volume & Instant Scrubbing
                     .pointerInput(settings.enableEdgeSwipes) {
-                        var dragMode = 0
-                        detectDragGestures(
-                            onDragStart = { startOffset ->
-                                val w = size.width.toFloat()
-                                dragMode = when {
-                                    settings.enableEdgeSwipes && startOffset.x < w * 0.25f -> 1
-                                    settings.enableEdgeSwipes && startOffset.x > w * 0.75f -> 2
-                                    else -> 3
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val startX = down.position.x
+                            val w = size.width.toFloat().coerceAtLeast(1f)
+                            val h = size.height.toFloat().coerceAtLeast(1f)
+                            val dragMode = when {
+                                settings.enableEdgeSwipes && startX < w * 0.25f -> 1
+                                settings.enableEdgeSwipes && startX > w * 0.75f -> 2
+                                else -> 3
+                            }
+                            var totalDx = 0f
+                            var totalDy = 0f
+                            var dragging = false
+
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (event.changes.count { it.pressed } > 1) {
+                                    if (dragging) hudText = null
+                                    break
                                 }
-                            },
-                            onDragEnd = { hudText = null; dragMode = 0 },
-                            onDragCancel = { hudText = null; dragMode = 0 },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                val w = size.width.toFloat().coerceAtLeast(1f)
-                                val h = size.height.toFloat().coerceAtLeast(1f)
-                                when (dragMode) {
-                                    1 -> {
-                                        val delta = (-dragAmount.y / h) * 100f
-                                        smoothBrightness = (smoothBrightness + delta).coerceIn(1f, 100f)
-                                        activity?.window?.attributes = activity?.window?.attributes?.apply {
-                                            screenBrightness = smoothBrightness / 100f
+                                val change = event.changes.firstOrNull() ?: break
+                                if (!change.pressed) {
+                                    if (dragging) hudText = null
+                                    break
+                                }
+                                val dx = change.position.x - change.previousPosition.x
+                                val dy = change.position.y - change.previousPosition.y
+                                totalDx += dx
+                                totalDy += dy
+
+                                if (!dragging && (abs(totalDx) > 18f || abs(totalDy) > 18f)) {
+                                    dragging = true
+                                }
+                                if (dragging) {
+                                    change.consume()
+                                    when (dragMode) {
+                                        1 -> {
+                                            smoothBrightness = (smoothBrightness + (-dy / h) * 100f).coerceIn(1f, 100f)
+                                            activity?.window?.attributes = activity?.window?.attributes?.apply {
+                                                screenBrightness = smoothBrightness / 100f
+                                            }
+                                            hudText = "Brightness: ${smoothBrightness.roundToInt()}%"
                                         }
-                                        hudText = "Brightness: ${smoothBrightness.roundToInt()}%"
-                                    }
-                                    2 -> {
-                                        val delta = (-dragAmount.y / h) * 160f
-                                        smoothVolume = (smoothVolume + delta).coerceIn(0f, 200f)
-                                        val volInt = smoothVolume.roundToInt()
-                                        val sysVol = ((volInt.coerceAtMost(100) * maxSystemVol) / 100)
-                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, sysVol, 0)
-                                        engine.applySmoothVolume(volInt)
-                                        hudText = "Volume: $volInt%"
-                                    }
-                                    3 -> {
-                                        if (abs(dragAmount.x) > abs(dragAmount.y)) {
-                                            val seekDeltaMs = ((dragAmount.x / w) * 45000L).toLong()
-                                            val newPos = ((engine.exoPlayer?.currentPosition ?: 0L) + seekDeltaMs)
-                                                .coerceIn(0L, durationMs)
-                                            engine.exoPlayer?.seekTo(newPos)
-                                            currentPosMs = newPos
-                                            hudText = FormatUtils.formatDuration(newPos)
+                                        2 -> {
+                                            smoothVolume = (smoothVolume + (-dy / h) * 160f).coerceIn(0f, 200f)
+                                            val volInt = smoothVolume.roundToInt()
+                                            val sysVol = ((volInt.coerceAtMost(100) * maxSystemVol) / 100)
+                                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, sysVol, 0)
+                                            engine.applySmoothVolume(volInt)
+                                            hudText = "Volume: $volInt%"
+                                        }
+                                        3 -> {
+                                            if (abs(dx) > abs(dy)) {
+                                                val seekDeltaMs = ((dx / w) * 45000L).toLong()
+                                                val newPos = ((engine.exoPlayer?.currentPosition ?: 0L) + seekDeltaMs)
+                                                    .coerceIn(0L, durationMs)
+                                                engine.exoPlayer?.seekTo(newPos)
+                                                currentPosMs = newPos
+                                                hudText = FormatUtils.formatDuration(newPos)
+                                            }
                                         }
                                     }
                                 }
                             }
-                        )
+                        }
                     }
             )
         }
@@ -431,23 +476,28 @@ fun VideoPlayerScreen(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xCC000000))
+                    .background(Color(0xB3000000))
                     .padding(horizontal = 20.dp, vertical = 10.dp)
             ) {
                 Text(text = hudText!!, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
         }
 
-        if (isLocked && !isInPipMode) {
+        AnimatedVisibility(
+            visible = isLocked && lockIconVisible && !isInPipMode,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopStart).padding(20.dp)
+        ) {
             IconButton(
                 onClick = { isLocked = false; controlsVisible = true },
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(20.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
-                    .background(Color(0xAA000000))
+                    .background(Color.White.copy(alpha = 0.14f))
+                    .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
             ) {
-                Icon(Icons.Rounded.Lock, contentDescription = "Unlock", tint = RinoxCyan)
+                Icon(Icons.Rounded.Lock, contentDescription = "Unlock", tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
 
@@ -456,7 +506,7 @@ fun VideoPlayerScreen(
             enter = fadeIn(),
             exit = fadeOut()
         ) {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0x55000000))) {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0x44000000))) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -519,11 +569,12 @@ fun VideoPlayerScreen(
                         .align(Alignment.CenterStart)
                         .padding(start = 12.dp)
                         .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0x99000000))
+                        .background(Color.White.copy(alpha = 0.14f))
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(24.dp))
                         .padding(vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    IconButton(onClick = { isLocked = true; controlsVisible = false }) {
+                    IconButton(onClick = { isLocked = true; lockIconVisible = true; controlsVisible = false }) {
                         Icon(Icons.Rounded.LockOpen, contentDescription = "Lock", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                     TextButton(onClick = { showSpeedDialog = true }) {
@@ -594,7 +645,6 @@ fun VideoPlayerScreen(
             }
         }
     }
-
     if (showEqDialog) {
         val presets = remember { engine.getEqualizerPresets() }
         AlertDialog(
@@ -674,7 +724,19 @@ fun VideoPlayerScreen(
             containerColor = DarkCard,
             title = { Text("Subtitles", color = Color.White) },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(
+                        onClick = {
+                            showSubDialog = false
+                            subPickerLauncher.launch(arrayOf("*/*"))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Open Subtitle (.srt / .ass / .vtt)")
+                    }
                     TextButton(onClick = {
                         engine.disableTrackType(C.TRACK_TYPE_TEXT)
                         showSubDialog = false
