@@ -85,4 +85,12 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+
+    // Media3 ExoPlayer + Jellyfin FFmpeg 64-bit Hybrid Decoder Engine
+    val media3Version = "1.4.1"
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-ui:$media3Version")
+    implementation("androidx.media3:media3-common:$media3Version")
+    implementation("androidx.media3:media3-session:$media3Version")
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.4.1+1")
 }
