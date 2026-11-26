@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -55,10 +56,11 @@ fun FlagshipFolderIcon(
         }
     }
 
-    val backColor = if (isDark) accentColor.copy(alpha = 0.55f) else Color(0xFFCFD8DC)
-    val frontTop = if (isDark) accentColor else Color(0xFFE3E8EE)
-    val frontBottom = if (isDark) accentColor.copy(alpha = 0.82f) else Color(0xFFD5DCE4)
-    val watermarkTint = if (isDark) Color.Black.copy(alpha = 0.35f) else Color(0xFF90A4AE)
+    // High-contrast flagship palette for both AMOLED Dark and Crisp Light mode
+    val backColor = if (isDark) accentColor.copy(alpha = 0.55f) else accentColor.copy(alpha = 0.65f)
+    val frontTop = if (isDark) accentColor else accentColor
+    val frontBottom = if (isDark) accentColor.copy(alpha = 0.80f) else accentColor.copy(alpha = 0.86f)
+    val watermarkTint = if (isDark) Color.Black.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.55f)
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize().padding(3.dp)) {
@@ -78,6 +80,16 @@ fun FlagshipFolderIcon(
                 close()
             }
             drawPath(path = tabPath, color = backColor)
+
+            // Subtle depth highlight on Light mode
+            if (!isDark) {
+                drawRoundRect(
+                    color = Color.Black.copy(alpha = 0.08f),
+                    topLeft = Offset(0f, h * 0.26f),
+                    size = Size(w, h * 0.68f),
+                    cornerRadius = CornerRadius(r, r)
+                )
+            }
 
             drawRoundRect(
                 brush = Brush.verticalGradient(listOf(frontTop, frontBottom)),
@@ -110,11 +122,18 @@ fun FolderItemCard(
     val textMain = MaterialTheme.colorScheme.onBackground
     val textSub = MaterialTheme.colorScheme.onSurfaceVariant
     val cardBg = MaterialTheme.colorScheme.surface
+    val subtitleInfo = buildString {
+        append("${folder.videos.size} videos")
+        if (settings.showFolderDuration && folder.totalDurationMs > 0L) {
+            append(" • ${FormatUtils.formatDuration(folder.totalDurationMs)}")
+        }
+    }
 
     if (settings.isGridView) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .shadow(if (settings.isDarkTheme) 0.dp else 2.dp, RoundedCornerShape(16.dp))
                 .clickable { onClick() },
             colors = CardDefaults.cardColors(containerColor = cardBg),
             shape = RoundedCornerShape(16.dp)
@@ -147,22 +166,6 @@ fun FolderItemCard(
                             )
                         }
                     }
-                    if (settings.showFolderDuration && folder.totalDurationMs > 0L) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xDD000000))
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        ) {
-                            Text(
-                                text = FormatUtils.formatDuration(folder.totalDurationMs),
-                                color = Color.White,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -174,9 +177,11 @@ fun FolderItemCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${folder.videos.size} videos",
+                    text = subtitleInfo,
                     color = textSub,
-                    fontSize = 12.sp
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -212,22 +217,6 @@ fun FolderItemCard(
                         )
                     }
                 }
-                if (settings.showFolderDuration && folder.totalDurationMs > 0L) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xDD000000))
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = FormatUtils.formatDuration(folder.totalDurationMs),
-                            color = Color.White,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
             }
             Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -241,7 +230,7 @@ fun FolderItemCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "${folder.videos.size} videos",
+                    text = subtitleInfo,
                     color = textSub,
                     fontSize = 12.sp
                 )
