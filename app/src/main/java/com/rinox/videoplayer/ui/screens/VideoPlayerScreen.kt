@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,7 +42,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.rinox.videoplayer.data.AppSettings
 import com.rinox.videoplayer.data.SettingsManager
 import com.rinox.videoplayer.data.VideoItem
@@ -103,7 +103,6 @@ fun VideoPlayerScreen(
     var selectedEqPreset by remember { mutableIntStateOf(-1) }
     var audioTracks by remember { mutableStateOf<List<TrackInfoItem>>(emptyList()) }
     var subTracks by remember { mutableStateOf<List<TrackInfoItem>>(emptyList()) }
-    // Smart Auto-Orientation: Reels/TikTok stays Portrait, Movies go Landscape
     LaunchedEffect(currentVideo.path) {
         activity?.requestedOrientation = if (currentVideo.height > currentVideo.width && currentVideo.width > 0) {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
@@ -112,7 +111,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Immersive Full-Screen
     DisposableEffect(Unit) {
         val window = activity?.window
         if (window != null) {
@@ -133,7 +131,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Zero Ghost-Audio Guarantee
     DisposableEffect(lifecycleOwner, backgroundPlayEnabled, isInPipMode) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP && !backgroundPlayEnabled && !isInPipMode) {
@@ -145,7 +142,6 @@ fun VideoPlayerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Build & Prepare LibVLC Hybrid Player
     LaunchedEffect(currentVideo.path, decoderMode, videoLayoutRef) {
         val layout = videoLayoutRef ?: return@LaunchedEffect
         val savedPos = if (settings.resumePlayback) {
