@@ -5,6 +5,7 @@ import android.net.Uri
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
 
@@ -103,7 +104,7 @@ class RinoxPlayerEngine(private val context: Context) {
                 listOf("srt", "ass", "ssa", "sub", "vtt").forEach { ext ->
                     val subFile = File(parent, "$base.$ext")
                     if (subFile.exists()) {
-                        media.addSlave(Media.Slave(Media.Slave.Type.Subtitle, 4, Uri.fromFile(subFile)))
+                        media.addSlave(IMedia.Slave(IMedia.Slave.Type.Subtitle, 4, Uri.fromFile(subFile).toString()))
                     }
                 }
             } catch (_: Exception) {}
@@ -120,7 +121,6 @@ class RinoxPlayerEngine(private val context: Context) {
 
     fun applySafeVolume(volumePercent: Int) {
         try {
-            // LibVLC supports clean 0% to 200% amplification natively without speaker clipping
             mediaPlayer?.volume = volumePercent.coerceIn(0, 200)
         } catch (_: Exception) {}
     }
@@ -185,10 +185,10 @@ class RinoxPlayerEngine(private val context: Context) {
         val player = mediaPlayer ?: return
         try {
             when (modeIndex) {
-                0 -> { player.aspectRatio = null; player.scale = 0f } // Fit
-                1 -> { player.aspectRatio = "16:9"; player.scale = 0f } // Stretch
-                2 -> { player.aspectRatio = null; player.scale = 1.35f } // Zoom/Crop
-                else -> { player.aspectRatio = null; player.scale = 1.0f } // 100%
+                0 -> { player.aspectRatio = null; player.scale = 0f }
+                1 -> { player.aspectRatio = "16:9"; player.scale = 0f }
+                2 -> { player.aspectRatio = null; player.scale = 1.35f }
+                else -> { player.aspectRatio = null; player.scale = 1.0f }
             }
         } catch (_: Exception) {}
     }
