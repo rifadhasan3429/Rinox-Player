@@ -48,7 +48,6 @@ class RinoxPlayerEngine(private val context: Context) {
         release()
         activeDecoderMode = decoderMode
 
-        // True Hardware (HW), Hybrid (HW+), and Software Fallback (SW) Modes
         val extMode = when (decoderMode) {
             "SW" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
             "HW+" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
@@ -199,6 +198,10 @@ class RinoxPlayerEngine(private val context: Context) {
             }
         } catch (_: Exception) {}
     }
+
+    fun getAudioTracks(): List<TrackInfoItem> = getTracks(C.TRACK_TYPE_AUDIO)
+
+    fun getSubtitleTracks(): List<TrackInfoItem> = getTracks(C.TRACK_TYPE_TEXT)
 
     fun getTracks(trackType: @C.TrackType Int): List<TrackInfoItem> {
         val player = exoPlayer ?: return emptyList()
