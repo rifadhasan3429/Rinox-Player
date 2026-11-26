@@ -298,8 +298,7 @@ fun RinoxMainApp(
                         )
                         DropdownMenu(
                             expanded = sortMenuOpen,
-                            onDismissRequest = { sortMenuOpen = false },
-                            containerColor = DarkCard
+                            onDismissRequest = { sortMenuOpen = false }
                         ) {
                             SortOption.entries.forEach { opt ->
                                 DropdownMenuItem(
