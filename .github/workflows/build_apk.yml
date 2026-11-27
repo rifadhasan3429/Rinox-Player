@@ -28,10 +28,16 @@ jobs:
           gradle-version: '8.7'
 
       - name: Generate Release Keystore
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          keytool -genkey -v -keystore app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias rinox -storepass rinox1234 -keypass rinox1234 -dname "CN=RinoxPlayer, OU=Dev, O=Rinox, L=Dhaka, S=Dhaka, C=BD"
+          keytool -genkey -v -keystore app/release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias "$KEY_ALIAS" -storepass "$KEY_PASSWORD" -keypass "$KEY_PASSWORD" -dname "CN=RinoxPlayer, OU=Dev, O=Rinox, L=Dhaka, S=Dhaka, C=BD"
 
       - name: Build Release APKs
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: gradle assembleRelease --stacktrace
 
       - name: Prepare Split Release APKs
