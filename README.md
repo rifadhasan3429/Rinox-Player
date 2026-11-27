@@ -37,4 +37,4 @@ Go to the **[Releases](../../releases)** section and download the build matching
 - **Language:** Kotlin 100%
 - **UI Framework:** Jetpack Compose (Material 3)
 - **Media Engine:** AndroidX Media3 (ExoPlayer)
-- **Minimum OS:** Android 10 (API 29) — Target Android 14 (API 34)
+- **Minimum OS:** Android 10 (API 29) — Target Android 16 (API 36)
