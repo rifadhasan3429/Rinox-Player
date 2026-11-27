@@ -33,14 +33,15 @@ android {
         abortOnError = false
     }
 
-    signingConfigs {
+        signingConfigs {
         create("release") {
             storeFile = file("release.jks")
-            storePassword = "rinox1234"
-            keyAlias = "rinox"
-            keyPassword = "rinox1234"
+            storePassword = System.getenv("KEY_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
         }
     }
+
     buildTypes {
         release {
             isMinifyEnabled = true
