@@ -1,40 +1,51 @@
-# 🎬 Rinox Player — 100% Offline 4K Video Player
+# 🎬 Rinox Player - Pro 4K Offline Video Player for Android
 
-**Rinox Player** is an ultra-smooth, zero-telemetry, 100% offline Android video player built with **Kotlin** and **Jetpack Compose**, engineered for flagship 120Hz/144Hz displays and effortless playback.
-
-> *Crafted by **Rifad Hasan***
+**Rinox Player** is a modern, lightweight, and 100% offline **4K Ultra HD Video Player for Android**, built with **Jetpack Compose** and powered by the **LibVLC All-In-One FFmpeg Engine**. Designed for pure performance with zero ads, zero tracking, and ultra-smooth **120Hz / 144Hz** high refresh rate support.
 
 ---
 
-### ✨ Key Flagship Features
+## 📸 Screenshots
 
-- **⚡ Hybrid Playback Engine (`HW` / `HW+` / `SW`):** Hardware-accelerated 4K playback with automatic software fallback and zero-delay instant scrubbing.
-- **🖥️ 120Hz / 144Hz Adaptive Refresh Rate:** Locks your display to its highest supported refresh rate for silky-smooth scrolling and gestures.
-- **📱 Smart Auto-Orientation:** Automatically keeps vertical videos (Reels/Shorts/TikTok) in portrait while rotating widescreen movies to landscape.
-- **🖼️ Picture-in-Picture (PiP) Mode:** Floating mini-player with uninterrupted background audio.
-- **🤏 Pro Touch Gestures:**
-  - **2-Finger Pinch-to-Zoom** (`100%` to `400%`) & smooth pan.
-  - **2-Finger Subtitle Resize** (`12sp` to `42sp`) directly on screen.
-  - **Up to 100x Consecutive Tap-Seek** (`+10s`, `+20s`... `+1000s`).
-  - **Hold-to-2.0X Speed** anywhere on screen.
-  - **Silky Edge Swipes** for Brightness & `0%–200%` Safe Volume Boost.
-- **🎚️ Studio Audio Equalizer:** Built-in hardware equalizer presets (*Bass Boost, Cinema, Pop, Rock, Vocal*) with zero speaker clipping.
-- **🔒 PIN-Protected Privacy Vault:** Hide sensitive videos in an encrypted private vault hidden from system galleries.
-- **🌓 Pure AMOLED Black & Crisp Light Themes:** Instant zero-load folder browser with customizable accent colors, FPS badges, and file size indicators.
-- **🛡️ 100% Offline & Private:** Zero `INTERNET` permission—no ads, no tracking, no background data.
+<p align="center">
+  <img src="s1.jpg" width="18%" />
+  <img src="s2.jpg" width="18%" />
+  <img src="s3.jpg" width="18%" />
+  <img src="s4.jpg" width="18%" />
+  <img src="s5.jpg" width="18%" />
+</p>
 
 ---
 
-### 📥 Download Official APK
+## ✨ Key Features
 
-Go to the **[Releases](../../releases)** section and download the build matching your device:
-- **`Rinox-Player-v1.0.0-arm64-v8a.apk`** — Recommended for all modern 64-bit Android phones.
-- **`Rinox-Player-v1.0.0-armeabi-v7a.apk`** — For older 32-bit Android devices.
+* **🚀 Hybrid HW/SW FFmpeg Decoder:** Smoothly plays 4K, 8K, 10-bit HDR, MKV, MP4, AVI, MOV, FLV, and all other video formats without lag.
+* **⚡ 120Hz / 144Hz High Refresh Rate:** Engineered for flagship displays with zero-load instant cache and buttery-smooth UI transitions.
+* **🔒 Built-in Privacy Vault:** Lock and hide your private videos securely inside an encrypted local vault.
+* **🎛️ 10-Band Audio Equalizer & Bass Boost:** Studio-grade sound customization with multi-track audio and subtitle support (SRT, ASS, VTT).
+* **📱 Smart Playback Controls:** Picture-in-Picture (PiP) mode, background audio play, gesture controls for brightness/volume, and smart portrait/landscape auto-rotation.
+* **🖤 True Pitch-Black AMOLED UI:** Battery-friendly dark interface crafted with Material 3 & Jetpack Compose.
+* **🛡️ 100% Offline & Ad-Free:** No internet permission required. Complete privacy with open-source transparency.
 
 ---
 
-### 🛠️ Built With
-- **Language:** Kotlin 100%
-- **UI Framework:** Jetpack Compose (Material 3)
-- **Media Engine:** AndroidX Media3 (ExoPlayer)
-- **Minimum OS:** Android 10 (API 29) — Target Android 16 (API 36)
+## 📥 Download Latest APK
+
+Grab the latest release directly from the [GitHub Releases](https://github.com) page:
+* **`Rinox-Player-arm64-v8a.apk`** — Recommended for all modern 64-bit Android smartphones.
+* **`Rinox-Player-armeabi-v7a.apk`** — Compatible with older 32-bit Android devices.
+
+---
+
+## 🛠️ Tech Stack & Architecture
+
+* **Language:** Kotlin
+* **UI Framework:** Jetpack Compose (Material 3)
+* **Media Engine:** LibVLC / FFmpeg (Hardware & Software Decoding)
+* **Build System:** Gradle Kotlin DSL + GitHub Actions CI/CD
+
+---
+
+## 👨‍💻 Author & License
+
+Crafted with ❤️ by **Rifad Hasan**  
+This project is open-source. Feel free to star ⭐ the repository, report issues, or contribute!
