@@ -69,22 +69,20 @@ fun CustomFolderVectorIcon(
             val w = size.width
             val h = size.height
 
-            // Back tab of folder
             val tabPath = Path().apply {
                 moveTo(w * 0.08f, h * 0.24f)
                 lineTo(w * 0.08f, h * 0.14f)
-                quadraticTo(w * 0.08f, h * 0.08f, w * 0.16f, h * 0.08f)
+                quadraticBezierTo(w * 0.08f, h * 0.08f, w * 0.16f, h * 0.08f)
                 lineTo(w * 0.40f, h * 0.08f)
                 lineTo(w * 0.48f, h * 0.18f)
                 lineTo(w * 0.88f, h * 0.18f)
-                quadraticTo(w * 0.94f, h * 0.18f, w * 0.94f, h * 0.26f)
+                quadraticBezierTo(w * 0.94f, h * 0.18f, w * 0.94f, h * 0.26f)
                 lineTo(w * 0.94f, h * 0.40f)
                 lineTo(w * 0.08f, h * 0.40f)
                 close()
             }
             drawPath(path = tabPath, color = Color(0xFF1976D2))
 
-            // Front body of folder with gradient
             drawRoundRect(
                 brush = Brush.verticalGradient(
                     colors = listOf(Color(0xFF42A5F5), Color(0xFF2196F3))
