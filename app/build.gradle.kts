@@ -105,6 +105,6 @@ dependencies {
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
 
-    // Jellyfin Media3 FFmpeg Decoder (10-bit HEVC/MKV & AC3/EAC3/DTS SW/HW+ Support)
-    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
+    // NextLib Full FFmpeg Video + Audio Decoder (10-bit HEVC/MKV & AC3/EAC3/DTS)
+    implementation("io.github.anilbeesetti:nextlib-media3ext:0.8.4")
 }
