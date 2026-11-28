@@ -64,6 +64,8 @@ import com.rinox.videoplayer.ui.screens.SettingsScreen
 import com.rinox.videoplayer.ui.screens.VideoPlayerScreen
 import com.rinox.videoplayer.ui.theme.*
 import com.rinox.videoplayer.utils.FormatUtils
+import com.rinox.videoplayer.utils.GitHubReleaseInfo
+import com.rinox.videoplayer.utils.GitHubUpdateChecker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -154,6 +156,15 @@ fun RinoxAppContent(
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         hasPermission = checkStoragePermission(context)
+    }
+
+    var availableUpdate by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
+    LaunchedEffect(Unit) {
+        delay(2000L)
+        val rel = GitHubUpdateChecker.checkForUpdate(context)
+        if (rel != null) {
+            availableUpdate = rel
+        }
     }
 
     var showSignature by remember { mutableStateOf(true) }
@@ -791,6 +802,43 @@ fun RinoxAppContent(
             }
         }
     }
+    availableUpdate?.let { rel ->
+        AlertDialog(
+            onDismissRequest = { availableUpdate = null },
+            containerColor = dialogBg,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.SystemUpdate, contentDescription = null, tint = RinoxBlue)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("New Update Available! (${rel.tagName})", color = textColor, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("A new version of Rinox Player is available on GitHub:", color = subTextColor, fontSize = 13.sp)
+                    Text(rel.releaseNotes, color = textColor, fontSize = 12.sp)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val target = rel
+                        availableUpdate = null
+                        GitHubUpdateChecker.downloadAndInstallApk(context, target)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RinoxBlue)
+                ) {
+                    Text("Update Now", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { availableUpdate = null }) {
+                    Text("Later", color = Color.Gray)
+                }
+            }
+        )
+    }
+
     if (showViewSortDialog) {
         ViewAndSortDialog(
             currentViewMode = viewMode,
