@@ -7,13 +7,11 @@ import android.util.Size
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
@@ -93,7 +91,6 @@ fun VideoThumbnailBox(
             )
         }
 
-        // Duration badge at bottom-right
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -110,7 +107,6 @@ fun VideoThumbnailBox(
             )
         }
 
-        // MX Player Pro style red/accent Watch Progress Bar at bottom edge
         if (video.watchProgressFraction > 0.01f) {
             Box(
                 modifier = Modifier
@@ -218,7 +214,7 @@ fun FolderCardItem(
             DropdownMenu(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
-                containerColor = DarkCard
+                modifier = Modifier.background(DarkCard)
             ) {
                 DropdownMenuItem(
                     text = { Text("Play All", color = Color.White) },
@@ -450,7 +446,7 @@ private fun VideoOptionsDropdown(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        containerColor = DarkCard
+        modifier = Modifier.background(DarkCard)
     ) {
         DropdownMenuItem(
             text = { Text("Play", color = Color.White) },
@@ -531,7 +527,6 @@ fun ViewAndSortDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // View Mode Row
                 Text("View", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                     BrowserViewMode.entries.forEach { mode ->
@@ -549,7 +544,6 @@ fun ViewAndSortDialog(
                     }
                 }
 
-                // Layout Row (List / Grid)
                 Text("Layout", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     BrowserLayoutMode.entries.forEach { layout ->
@@ -573,8 +567,6 @@ fun ViewAndSortDialog(
                         )
                     }
                 }
-
-                // Sort Grid (10 MX Player Pro Options)
                 Text("Sort by", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
@@ -611,7 +603,6 @@ fun ViewAndSortDialog(
                     }
                 }
 
-                // Ascending / Descending Buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     SortDirection.entries.forEach { dir ->
                         val active = selectedDir == dir
@@ -634,7 +625,6 @@ fun ViewAndSortDialog(
                     }
                 }
 
-                // Fields Accordion
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
