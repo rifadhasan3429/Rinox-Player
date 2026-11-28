@@ -46,6 +46,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.rinox.videoplayer.data.*
 import com.rinox.videoplayer.ui.components.*
+import com.rinox.videoplayer.ui.screens.AccentPalette
 import com.rinox.videoplayer.ui.screens.SettingsScreen
 import com.rinox.videoplayer.ui.screens.VideoPlayerScreen
 import com.rinox.videoplayer.ui.theme.*
@@ -79,13 +80,7 @@ class MainActivity : ComponentActivity() {
             var settings: AppSettings by remember { mutableStateOf(settingsManager.loadSettings()) }
 
             val isDark = settings.isDarkTheme
-            val accentColor = when (settings.accentIndex) {
-                1 -> RinoxPurple
-                2 -> RinoxEmerald
-                3 -> RinoxAmber
-                4 -> RinoxCrimson
-                else -> RinoxCyan
-            }
+            val accentColor = AccentPalette.getOrElse(settings.accentIndex) { RinoxCyan }
 
             RinoxPlayerTheme(darkTheme = isDark, accentColor = accentColor) {
                 Surface(
@@ -657,10 +652,9 @@ fun RinoxAppContent(
                 2 -> {
                     SettingsScreen(
                         settings = settings,
-                        settingsManager = settingsManager,
-                        accentColor = accentColor,
                         onUpdateSettings = onSettingsUpdated,
-                        onRescanFolders = { refreshMedia() }
+                        onRescanLibrary = { refreshMedia() },
+                        onBack = { selectedTab = 0 }
                     )
                 }
             }
