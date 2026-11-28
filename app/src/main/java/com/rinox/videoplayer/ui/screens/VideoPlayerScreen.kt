@@ -61,8 +61,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.SubtitleView
@@ -96,6 +99,7 @@ fun VideoPlayerScreen(
     val currentVideo = playlist.getOrNull(currentIndex) ?: return
 
     val engine = remember { RinoxPlayerEngine(context) }
+    var activePlayer by remember { mutableStateOf<ExoPlayer?>(null) }
     var decoderMode by remember { mutableStateOf(settings.defaultDecoder) }
     var isPlaying by remember { mutableStateOf(true) }
     var currentPosMs by remember { mutableLongStateOf(0L) }
@@ -115,7 +119,7 @@ fun VideoPlayerScreen(
         if (uri != null) {
             customSubUri = uri
             customSubName = uri.lastPathSegment ?: "External Subtitle"
-            val resumeAt = engine.exoPlayer?.currentPosition ?: currentPosMs
+            val resumeAt = activePlayer?.currentPosition ?: currentPosMs
             engine.prepareMedia(currentVideo.uri, currentVideo.path, resumeAt, true, customSubUri, customSubName)
             Toast.makeText(context, "Subtitle Loaded!", Toast.LENGTH_SHORT).show()
         }
@@ -232,6 +236,7 @@ fun VideoPlayerScreen(
                 window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activePlayer = null
             engine.release()
         }
     }
@@ -241,7 +246,7 @@ fun VideoPlayerScreen(
                 activity?.isInPictureInPictureMode == true
             } else false
             if (event == Lifecycle.Event.ON_STOP && !backgroundPlayEnabled && !inPip) {
-                engine.exoPlayer?.pause()
+                activePlayer?.pause()
                 isPlaying = false
             }
         }
@@ -255,7 +260,7 @@ fun VideoPlayerScreen(
                 .getLong(currentVideo.path, 0L)
         } else 0L
 
-        engine.buildPlayer(
+        val builtPlayer = engine.buildPlayer(
             decoderMode = decoderMode,
             onErrorFallback = { fallbackMode ->
                 decoderMode = fallbackMode
@@ -280,6 +285,7 @@ fun VideoPlayerScreen(
                 }
             }
         )
+        activePlayer = builtPlayer
         engine.prepareMedia(currentVideo.uri, currentVideo.path, savedPos, settings.autoLoadSubtitles, customSubUri, customSubName)
         engine.applySmoothVolume(smoothVolume.roundToInt())
         if (selectedEqPreset >= 0) engine.applyEqualizerPreset(selectedEqPreset)
@@ -290,7 +296,7 @@ fun VideoPlayerScreen(
     LaunchedEffect(currentVideo.path) {
         while (true) {
             delay(200L)
-            engine.exoPlayer?.let { p ->
+            activePlayer?.let { p ->
                 isPlaying = p.isPlaying
                 currentPosMs = p.currentPosition.coerceAtLeast(0L)
                 if (p.duration > 0L) durationMs = p.duration
@@ -323,11 +329,17 @@ fun VideoPlayerScreen(
         if (isLocked) {
             lockIconVisible = true
         } else {
+            activePlayer = null
             engine.release()
             onClose()
         }
     }
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        val boundPlayer = activePlayer
+        val boundAspect = videoAspectRatio
+        val boundResizeMode = aspectModes[aspectIndex].first
+        val boundSubSize = dynamicSubSizeSp
+
         AndroidView(
             factory = { ctx ->
                 val aspectFrame = AspectRatioFrameLayout(ctx).apply {
@@ -336,8 +348,8 @@ fun VideoPlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         android.view.Gravity.CENTER
                     )
-                    setAspectRatio(videoAspectRatio)
-                    resizeMode = aspectModes[aspectIndex].first
+                    setAspectRatio(boundAspect)
+                    resizeMode = boundResizeMode
                 }
                 val textureView = TextureView(ctx).apply {
                     layoutParams = FrameLayout.LayoutParams(
@@ -363,33 +375,32 @@ fun VideoPlayerScreen(
                             null
                         )
                     )
-                    setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, dynamicSubSizeSp)
+                    setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, boundSubSize)
                 }
                 aspectFrame.addView(textureView)
-                val root = FrameLayout(ctx).apply {
+                FrameLayout(ctx).apply {
                     addView(aspectFrame)
                     addView(subtitleView)
                     tag = Triple(aspectFrame, textureView, subtitleView)
                 }
-                engine.exoPlayer?.setVideoTextureView(textureView)
-                engine.exoPlayer?.addListener(object : androidx.media3.common.Player.Listener {
-                    override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
-                        subtitleView.setCues(cueGroup.cues)
-                    }
-                })
-                root
             },
             update = { root ->
                 @Suppress("UNCHECKED_CAST")
                 val triple = root.tag as? Triple<AspectRatioFrameLayout, TextureView, SubtitleView>
                 if (triple != null) {
                     val (aspectFrame, textureView, subtitleView) = triple
-                    aspectFrame.setAspectRatio(videoAspectRatio)
-                    aspectFrame.resizeMode = aspectModes[aspectIndex].first
-                    subtitleView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, dynamicSubSizeSp)
-                    engine.exoPlayer?.let { p ->
-                        p.setVideoTextureView(textureView)
-                        subtitleView.setCues(p.currentCues.cues)
+                    aspectFrame.setAspectRatio(boundAspect)
+                    aspectFrame.resizeMode = boundResizeMode
+                    subtitleView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, boundSubSize)
+                    if (boundPlayer != null && root.getTag(Int.MAX_VALUE) !== boundPlayer) {
+                        boundPlayer.setVideoTextureView(textureView)
+                        boundPlayer.addListener(object : Player.Listener {
+                            override fun onCues(cueGroup: CueGroup) {
+                                subtitleView.setCues(cueGroup.cues)
+                            }
+                        })
+                        subtitleView.setCues(boundPlayer.currentCues.cues)
+                        root.setTag(Int.MAX_VALUE, boundPlayer)
                     }
                 }
             },
@@ -449,9 +460,9 @@ fun VideoPlayerScreen(
                                         .coerceIn(-100 * settings.seekStepSeconds, 100 * settings.seekStepSeconds)
                                     accumulatedSeekSec = nextAcc
                                     lastTapTimestamp = now
-                                    val targetPos = ((engine.exoPlayer?.currentPosition ?: 0L) + dir * settings.seekStepSeconds * 1000L)
+                                    val targetPos = ((activePlayer?.currentPosition ?: 0L) + dir * settings.seekStepSeconds * 1000L)
                                         .coerceIn(0L, durationMs)
-                                    engine.exoPlayer?.seekTo(targetPos)
+                                    activePlayer?.seekTo(targetPos)
                                     currentPosMs = targetPos
                                     hudText = if (accumulatedSeekSec > 0) "+${accumulatedSeekSec}s" else "${accumulatedSeekSec}s"
                                 } else {
@@ -466,33 +477,33 @@ fun VideoPlayerScreen(
                                 if (offset.x > widthPx * 0.65f) {
                                     accumulatedSeekSec = (accumulatedSeekSec + settings.seekStepSeconds)
                                         .coerceAtMost(100 * settings.seekStepSeconds)
-                                    val targetPos = ((engine.exoPlayer?.currentPosition ?: 0L) + settings.seekStepSeconds * 1000L)
+                                    val targetPos = ((activePlayer?.currentPosition ?: 0L) + settings.seekStepSeconds * 1000L)
                                         .coerceIn(0L, durationMs)
-                                    engine.exoPlayer?.seekTo(targetPos)
+                                    activePlayer?.seekTo(targetPos)
                                     currentPosMs = targetPos
                                     hudText = "+${accumulatedSeekSec}s"
                                 } else if (offset.x < widthPx * 0.35f) {
                                     accumulatedSeekSec = (accumulatedSeekSec - settings.seekStepSeconds)
                                         .coerceAtLeast(-100 * settings.seekStepSeconds)
-                                    val targetPos = ((engine.exoPlayer?.currentPosition ?: 0L) - settings.seekStepSeconds * 1000L)
+                                    val targetPos = ((activePlayer?.currentPosition ?: 0L) - settings.seekStepSeconds * 1000L)
                                         .coerceIn(0L, durationMs)
-                                    engine.exoPlayer?.seekTo(targetPos)
+                                    activePlayer?.seekTo(targetPos)
                                     currentPosMs = targetPos
                                     hudText = "${accumulatedSeekSec}s"
                                 } else {
-                                    engine.exoPlayer?.let { p -> if (p.isPlaying) p.pause() else p.play() }
+                                    activePlayer?.let { p -> if (p.isPlaying) p.pause() else p.play() }
                                 }
                             },
                             onLongPress = {
                                 is2xHolding = true
-                                engine.exoPlayer?.setPlaybackSpeed(2.0f)
+                                activePlayer?.setPlaybackSpeed(2.0f)
                                 hudText = "2.0X Speed"
                             },
                             onPress = {
                                 tryAwaitRelease()
                                 if (is2xHolding) {
                                     is2xHolding = false
-                                    engine.exoPlayer?.setPlaybackSpeed(playbackSpeed)
+                                    activePlayer?.setPlaybackSpeed(playbackSpeed)
                                     hudText = null
                                 }
                             }
@@ -553,9 +564,9 @@ fun VideoPlayerScreen(
                                         3 -> {
                                             if (abs(dx) > abs(dy)) {
                                                 val seekDeltaMs = ((dx / w) * 45000L).toLong()
-                                                val newPos = ((engine.exoPlayer?.currentPosition ?: 0L) + seekDeltaMs)
+                                                val newPos = ((activePlayer?.currentPosition ?: 0L) + seekDeltaMs)
                                                     .coerceIn(0L, durationMs)
-                                                engine.exoPlayer?.seekTo(newPos)
+                                                activePlayer?.seekTo(newPos)
                                                 currentPosMs = newPos
                                                 hudText = FormatUtils.formatDuration(newPos)
                                             }
@@ -610,7 +621,7 @@ fun VideoPlayerScreen(
                         .padding(horizontal = 10.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { engine.release(); onClose() }) {
+                    IconButton(onClick = { activePlayer = null; engine.release(); onClose() }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                     Column(modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) {
@@ -697,7 +708,7 @@ fun VideoPlayerScreen(
                             value = currentPosMs.toFloat(),
                             onValueChange = { pos ->
                                 currentPosMs = pos.toLong()
-                                engine.exoPlayer?.seekTo(currentPosMs)
+                                activePlayer?.seekTo(currentPosMs)
                             },
                             valueRange = 0f..durationMs.toFloat().coerceAtLeast(1f),
                             colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
@@ -723,7 +734,7 @@ fun VideoPlayerScreen(
                             Icon(Icons.Rounded.SkipPrevious, contentDescription = "Prev", tint = Color.White, modifier = Modifier.size(32.dp))
                         }
                         IconButton(
-                            onClick = { engine.exoPlayer?.let { if (it.isPlaying) it.pause() else it.play() } },
+                            onClick = { activePlayer?.let { if (it.isPlaying) it.pause() else it.play() } },
                             modifier = Modifier.size(54.dp).clip(CircleShape).background(accentColor)
                         ) {
                             Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, contentDescription = "PlayPause", tint = Color.White, modifier = Modifier.size(34.dp))
@@ -771,6 +782,7 @@ fun VideoPlayerScreen(
             dismissButton = {
                 TextButton(onClick = {
                     playbackErrorMessage = null
+                    activePlayer = null
                     engine.release()
                     onClose()
                 }) {
@@ -823,7 +835,7 @@ fun VideoPlayerScreen(
                     listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f, 4.0f).forEach { spd ->
                         TextButton(onClick = {
                             playbackSpeed = spd
-                            engine.exoPlayer?.setPlaybackSpeed(spd)
+                            activePlayer?.setPlaybackSpeed(spd)
                             showSpeedDialog = false
                         }) { Text("${spd}x", color = if (playbackSpeed == spd) RinoxCyan else Color.White) }
                     }
