@@ -14,8 +14,11 @@ import android.os.Build
 import android.util.Rational
 import android.util.TypedValue
 import android.view.KeyEvent
+import android.view.TextureView
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -58,10 +61,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.C
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
-import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
 import com.rinox.videoplayer.data.AppSettings
 import com.rinox.videoplayer.data.SettingsManager
 import com.rinox.videoplayer.data.VideoItem
@@ -103,6 +107,7 @@ fun VideoPlayerScreen(
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     var is2xHolding by remember { mutableStateOf(false) }
     var playbackErrorMessage by remember { mutableStateOf<String?>(null) }
+    var videoAspectRatio by remember { mutableFloatStateOf(16f / 9f) }
 
     var customSubUri by remember { mutableStateOf<Uri?>(null) }
     var customSubName by remember { mutableStateOf<String?>(null) }
@@ -194,6 +199,9 @@ fun VideoPlayerScreen(
         customSubUri = null; customSubName = null
         playbackErrorMessage = null
         liveFps = currentVideo.fps.coerceAtLeast(24)
+        if (currentVideo.width > 0 && currentVideo.height > 0) {
+            videoAspectRatio = currentVideo.width.toFloat() / currentVideo.height.toFloat()
+        }
         activity?.requestedOrientation = if (currentVideo.height > currentVideo.width && currentVideo.width > 0) {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
         } else {
@@ -264,8 +272,12 @@ fun VideoPlayerScreen(
             onTracksChanged = {
                 audioTracks = engine.getAudioTracks()
                 subTracks = engine.getSubtitleTracks()
-                val detectedFps = engine.exoPlayer?.videoFormat?.frameRate?.roundToInt() ?: 0
+                val vf = engine.exoPlayer?.videoFormat
+                val detectedFps = vf?.frameRate?.roundToInt() ?: 0
                 if (detectedFps > 0) liveFps = detectedFps
+                if (vf != null && vf.width > 0 && vf.height > 0) {
+                    videoAspectRatio = (vf.width * vf.pixelWidthHeightRatio) / vf.height.toFloat()
+                }
             }
         )
         engine.prepareMedia(currentVideo.uri, currentVideo.path, savedPos, settings.autoLoadSubtitles, customSubUri, customSubName)
@@ -282,8 +294,13 @@ fun VideoPlayerScreen(
                 isPlaying = p.isPlaying
                 currentPosMs = p.currentPosition.coerceAtLeast(0L)
                 if (p.duration > 0L) durationMs = p.duration
-                val vf = p.videoFormat?.frameRate?.roundToInt() ?: 0
-                if (vf > 0) liveFps = vf
+                val vf = p.videoFormat
+                val fpsVal = vf?.frameRate?.roundToInt() ?: 0
+                if (fpsVal > 0) liveFps = fpsVal
+                val vs: VideoSize = p.videoSize
+                if (vs.width > 0 && vs.height > 0) {
+                    videoAspectRatio = (vs.width * vs.pixelWidthHeightRatio) / vs.height.toFloat()
+                }
                 if (p.isPlaying && currentPosMs > 2000L) {
                     context.getSharedPreferences("rinox_positions", Context.MODE_PRIVATE)
                         .edit().putLong(currentVideo.path, currentPosMs).apply()
@@ -313,36 +330,68 @@ fun VideoPlayerScreen(
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                val aspectFrame = AspectRatioFrameLayout(ctx).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.Gravity.CENTER
+                    )
+                    setAspectRatio(videoAspectRatio)
                     resizeMode = aspectModes[aspectIndex].first
-                    subtitleView?.apply {
-                        visibility = View.VISIBLE
-                        setApplyEmbeddedStyles(true)
-                        setApplyEmbeddedFontSizes(false)
-                        setStyle(
-                            CaptionStyleCompat(
-                                AndroidColor.WHITE,
-                                AndroidColor.argb(110, 0, 0, 0),
-                                AndroidColor.TRANSPARENT,
-                                CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
-                                AndroidColor.BLACK,
-                                null
-                            )
+                }
+                val textureView = TextureView(ctx).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                }
+                val subtitleView = SubtitleView(ctx).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    visibility = View.VISIBLE
+                    setApplyEmbeddedStyles(true)
+                    setApplyEmbeddedFontSizes(false)
+                    setStyle(
+                        CaptionStyleCompat(
+                            AndroidColor.WHITE,
+                            AndroidColor.argb(110, 0, 0, 0),
+                            AndroidColor.TRANSPARENT,
+                            CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                            AndroidColor.BLACK,
+                            null
                         )
-                        setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, dynamicSubSizeSp)
+                    )
+                    setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, dynamicSubSizeSp)
+                }
+                aspectFrame.addView(textureView)
+                val root = FrameLayout(ctx).apply {
+                    addView(aspectFrame)
+                    addView(subtitleView)
+                    tag = Triple(aspectFrame, textureView, subtitleView)
+                }
+                engine.exoPlayer?.setVideoTextureView(textureView)
+                engine.exoPlayer?.addListener(object : androidx.media3.common.Player.Listener {
+                    override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
+                        subtitleView.setCues(cueGroup.cues)
                     }
-                    player = engine.exoPlayer
-                }
+                })
+                root
             },
-            update = { view ->
-                if (view.player != engine.exoPlayer) {
-                    view.player = engine.exoPlayer
+            update = { root ->
+                @Suppress("UNCHECKED_CAST")
+                val triple = root.tag as? Triple<AspectRatioFrameLayout, TextureView, SubtitleView>
+                if (triple != null) {
+                    val (aspectFrame, textureView, subtitleView) = triple
+                    aspectFrame.setAspectRatio(videoAspectRatio)
+                    aspectFrame.resizeMode = aspectModes[aspectIndex].first
+                    subtitleView.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, dynamicSubSizeSp)
+                    engine.exoPlayer?.let { p ->
+                        p.setVideoTextureView(textureView)
+                        subtitleView.setCues(p.currentCues.cues)
+                    }
                 }
-                view.resizeMode = aspectModes[aspectIndex].first
-                view.subtitleView?.visibility = View.VISIBLE
-                view.subtitleView?.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, dynamicSubSizeSp)
             },
             modifier = Modifier
                 .fillMaxSize()
