@@ -16,10 +16,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -94,7 +97,6 @@ class MainActivity : ComponentActivity() {
             val isDark = settings.isDarkTheme
             val accentColor = AccentPalette.getOrElse(settings.accentIndex) { RinoxBlue }
 
-            // Ensure status bar icons (clock, battery, network) are clearly visible in BOTH Light and Dark UI
             SideEffect {
                 val window = (view.context as? Activity)?.window
                 if (window != null) {
@@ -154,19 +156,22 @@ fun RinoxAppContent(
         hasPermission = checkStoragePermission(context)
     }
 
-    // Shining developer signature visible for 3.5 seconds on app launch
+    // Show shining "Crafted by Rifad Hasan" in place of "Folders" for 3.5 seconds after home screen opens
     var showSignature by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        delay(3500L)
-        showSignature = false
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            showSignature = true
+            delay(3500L)
+            showSignature = false
+        }
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "sigShine")
     val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -200f,
-        targetValue = 600f,
+        initialValue = -250f,
+        targetValue = 750f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            animation = tween(durationMillis = 1400, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "shimmer"
@@ -191,7 +196,7 @@ fun RinoxAppContent(
 
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    var activeScreen by remember { mutableIntStateOf(0) } // 0 = Home, 1 = Privacy, 2 = Settings
+    var activeScreen by remember { mutableIntStateOf(0) }
     var openedFolder by remember { mutableStateOf<VideoFolder?>(null) }
 
     var folders by remember { mutableStateOf<List<VideoFolder>>(emptyList()) }
@@ -352,6 +357,7 @@ fun RinoxAppContent(
     val textColor = if (isDark) Color.White else Color(0xFF111318)
     val subTextColor = if (isDark) Color(0xFF9AA3B2) else Color(0xFF5A6270)
     val chipBg = if (isDark) DarkCard else Color(0xFFEBF0F5)
+    val dialogBg = if (isDark) DarkCard else Color.White
 
     Scaffold(
         containerColor = if (isDark) DarkBg else LightBg,
@@ -417,44 +423,53 @@ fun RinoxAppContent(
                                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = textColor)
                             }
                         }
-                        Column(modifier = Modifier.weight(1f)) {
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                             val headerTitle = when {
                                 activeScreen == 1 -> "Privacy Vault"
                                 openedFolder != null -> openedFolder!!.name
                                 viewMode == BrowserViewMode.FILES -> "All Videos"
                                 else -> "Folders"
                             }
-                            Text(
-                                text = headerTitle,
-                                color = textColor,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            AnimatedVisibility(
-                                visible = showSignature && activeScreen == 0 && openedFolder == null,
-                                enter = fadeIn(),
-                                exit = fadeOut(animationSpec = tween(600))
-                            ) {
-                                val shineBrush = Brush.linearGradient(
-                                    colors = listOf(
-                                        RinoxBlue,
-                                        Color(0xFF80D8FF),
-                                        Color.White,
-                                        RinoxBlue
-                                    ),
-                                    start = Offset(shimmerOffset - 120f, 0f),
-                                    end = Offset(shimmerOffset + 120f, 0f)
-                                )
-                                Text(
-                                    text = "Crafted by Rifad Hasan",
-                                    style = TextStyle(
-                                        brush = shineBrush,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
+                            val isShowingIntroName = showSignature && activeScreen == 0 && openedFolder == null
+
+                            AnimatedContent(
+                                targetState = isShowingIntroName,
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = tween(550)) + slideInVertically { it / 2 })
+                                        .togetherWith(fadeOut(animationSpec = tween(550)) + slideOutVertically { -it / 2 })
+                                },
+                                label = "HeaderIntroAnim"
+                            ) { showName ->
+                                if (showName) {
+                                    val shineBrush = Brush.linearGradient(
+                                        colors = if (isDark) {
+                                            listOf(RinoxBlue, Color(0xFF80D8FF), Color.White, RinoxBlue)
+                                        } else {
+                                            listOf(Color(0xFF1565C0), RinoxBlue, Color(0xFF00B0FF), Color(0xFF1565C0))
+                                        },
+                                        start = Offset(shimmerOffset - 140f, 0f),
+                                        end = Offset(shimmerOffset + 140f, 0f)
                                     )
-                                )
+                                    Text(
+                                        text = "Crafted by Rifad Hasan",
+                                        style = TextStyle(
+                                            brush = shineBrush,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                } else {
+                                    Text(
+                                        text = headerTitle,
+                                        color = textColor,
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
 
@@ -478,7 +493,6 @@ fun RinoxAppContent(
                         }
                     }
 
-                    // Original Pill Chip Row: Privacy | All Videos | Sort
                     if (activeScreen == 0 && openedFolder == null) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(
@@ -782,6 +796,7 @@ fun RinoxAppContent(
             currentSortOption = sortOption,
             currentSortDirection = sortDirection,
             currentFields = cardFields,
+            isDark = isDark,
             accentColor = RinoxBlue,
             onDismiss = { showViewSortDialog = false },
             onApply = { vMode, lMode, sOpt, sDir, flds ->
@@ -806,6 +821,7 @@ fun RinoxAppContent(
         RenameItemDialog(
             title = "Rename Video",
             initialName = File(vid.path).nameWithoutExtension,
+            isDark = isDark,
             accentColor = RinoxBlue,
             onDismiss = { videoToRename = null },
             onConfirm = { newName ->
@@ -825,6 +841,7 @@ fun RinoxAppContent(
         TargetFolderPickerDialog(
             title = "Copy Video to...",
             folders = availableTargetDirs,
+            isDark = isDark,
             accentColor = RinoxBlue,
             onDismiss = { videoToCopy = null },
             onSelectFolder = { targetDir ->
@@ -845,6 +862,7 @@ fun RinoxAppContent(
         TargetFolderPickerDialog(
             title = "Move Video to...",
             folders = availableTargetDirs,
+            isDark = isDark,
             accentColor = RinoxBlue,
             onDismiss = { videoToMove = null },
             onSelectFolder = { targetDir ->
@@ -863,9 +881,9 @@ fun RinoxAppContent(
     videoToDelete?.let { vid ->
         AlertDialog(
             onDismissRequest = { videoToDelete = null },
-            containerColor = DarkCard,
-            title = { Text("Delete Video?", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to permanently delete '${vid.displayName}'?", color = Color.LightGray) },
+            containerColor = dialogBg,
+            title = { Text("Delete Video?", color = textColor, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to permanently delete '${vid.displayName}'?", color = subTextColor) },
             confirmButton = {
                 TextButton(onClick = {
                     val target = vid
@@ -895,6 +913,7 @@ fun RinoxAppContent(
                 "Frame Rate" to "${vid.fps} FPS",
                 "Format" to vid.mimeType
             ),
+            isDark = isDark,
             accentColor = RinoxBlue,
             onDismiss = { videoProperties = null }
         )
@@ -904,6 +923,7 @@ fun RinoxAppContent(
         RenameItemDialog(
             title = "Rename Folder",
             initialName = fld.name,
+            isDark = isDark,
             accentColor = RinoxBlue,
             onDismiss = { folderToRename = null },
             onConfirm = { newName ->
@@ -923,6 +943,7 @@ fun RinoxAppContent(
         TargetFolderPickerDialog(
             title = "Copy Folder '${fld.name}' to...",
             folders = availableTargetDirs,
+            isDark = isDark,
             accentColor = RinoxBlue,
             onDismiss = { folderToCopy = null },
             onSelectFolder = { targetDir ->
@@ -941,6 +962,7 @@ fun RinoxAppContent(
         TargetFolderPickerDialog(
             title = "Move Folder '${fld.name}' to...",
             folders = availableTargetDirs,
+            isDark = isDark,
             accentColor = RinoxBlue,
             onDismiss = { folderToMove = null },
             onSelectFolder = { targetDir ->
@@ -957,9 +979,9 @@ fun RinoxAppContent(
     folderToDelete?.let { fld ->
         AlertDialog(
             onDismissRequest = { folderToDelete = null },
-            containerColor = DarkCard,
-            title = { Text("Delete Folder?", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Delete all ${fld.videoCount} videos inside '${fld.name}' permanently?", color = Color.LightGray) },
+            containerColor = dialogBg,
+            title = { Text("Delete Folder?", color = textColor, fontWeight = FontWeight.Bold) },
+            text = { Text("Delete all ${fld.videoCount} videos inside '${fld.name}' permanently?", color = subTextColor) },
             confirmButton = {
                 TextButton(onClick = {
                     val target = fld
@@ -988,6 +1010,7 @@ fun RinoxAppContent(
                 "Total Size" to FormatUtils.formatSize(fld.totalSizeBytes),
                 "Total Duration" to FormatUtils.formatDuration(fld.totalDurationMs)
             ),
+            isDark = isDark,
             accentColor = RinoxBlue,
             onDismiss = { folderProperties = null }
         )
