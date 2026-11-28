@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -18,7 +17,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,7 +25,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -63,7 +60,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Enable highest display refresh rate (120Hz / 144Hz) when available
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val modes = display?.supportedModes
@@ -81,7 +77,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val settingsManager = remember { SettingsManager(context) }
-            val settings by settingsManager.settingsFlow.collectAsState()
+            val settings by settingsManager.settings.collectAsState()
 
             val systemDark = isSystemInDarkTheme()
             val isDark = when (settings.themeMode) {
@@ -120,7 +116,7 @@ class MainActivity : ComponentActivity() {
         isInPictureInPictureMode: Boolean,
         newConfig: Configuration
     ) {
-        super.onPictureInPictureInPictureMode(isInPictureInPictureMode, newConfig)
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipModeState = isInPictureInPictureMode
     }
 }
@@ -144,7 +140,6 @@ fun RinoxAppContent(
         hasPermission = checkStoragePermission(context)
     }
 
-    // View, Layout & Sort States
     var viewMode by remember { mutableStateOf(BrowserViewMode.ALL_FOLDERS) }
     var layoutMode by remember { mutableStateOf(BrowserLayoutMode.LIST) }
     var sortOption by remember { mutableStateOf(SortOption.TITLE) }
@@ -152,27 +147,21 @@ fun RinoxAppContent(
     var cardFields by remember { mutableStateOf(BrowserCardFields()) }
     var showViewSortDialog by remember { mutableStateOf(false) }
 
-    // Search & Navigation States
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Videos, 1 = Privacy, 2 = Settings
+    var selectedTab by remember { mutableIntStateOf(0) }
     var openedFolder by remember { mutableStateOf<VideoFolder?>(null) }
 
-    // Media Data States
     var folders by remember { mutableStateOf<List<VideoFolder>>(emptyList()) }
     var allVideos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
     var privateVideos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
 
-    // Active Player State
     var activePlaylist by remember { mutableStateOf<List<VideoItem>?>(null) }
     var activeIndex by remember { mutableIntStateOf(0) }
 
-    // Privacy PIN States
     var isPrivacyUnlocked by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
-
-    // File & Folder Action Dialog States
     var videoToRename by remember { mutableStateOf<VideoItem?>(null) }
     var videoToCopy by remember { mutableStateOf<VideoItem?>(null) }
     var videoToMove by remember { mutableStateOf<VideoItem?>(null) }
@@ -233,7 +222,6 @@ fun RinoxAppContent(
             refreshMedia()
         }
     }
-    // Fullscreen Video Player Overlay
     if (activePlaylist != null) {
         VideoPlayerScreen(
             playlist = activePlaylist!!,
@@ -724,6 +712,7 @@ fun RinoxAppContent(
             }
         )
     }
+
     videoToMove?.let { vid ->
         TargetFolderPickerDialog(
             title = "Move Video to...",
@@ -766,7 +755,6 @@ fun RinoxAppContent(
             }
         )
     }
-
     videoProperties?.let { vid ->
         PropertiesInfoDialog(
             title = "Video Properties",
@@ -802,6 +790,7 @@ fun RinoxAppContent(
             }
         )
     }
+
     folderToCopy?.let { fld ->
         TargetFolderPickerDialog(
             title = "Copy Folder '${fld.name}' to...",
