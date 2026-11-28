@@ -156,7 +156,6 @@ fun RinoxAppContent(
         hasPermission = checkStoragePermission(context)
     }
 
-    // Show shining "Crafted by Rifad Hasan" in place of "Folders" for 3.5 seconds after home screen opens
     var showSignature by remember { mutableStateOf(true) }
     LaunchedEffect(hasPermission) {
         if (hasPermission) {
@@ -366,7 +365,7 @@ fun RinoxAppContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
                 if (isSearchActive) {
                     Row(
@@ -417,9 +416,10 @@ fun RinoxAppContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (activeScreen == 1 || openedFolder != null) {
-                            IconButton(onClick = {
-                                if (activeScreen == 1) activeScreen = 0 else openedFolder = null
-                            }) {
+                            IconButton(
+                                onClick = { if (activeScreen == 1) activeScreen = 0 else openedFolder = null },
+                                modifier = Modifier.size(36.dp)
+                            ) {
                                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = textColor)
                             }
                         }
@@ -454,17 +454,18 @@ fun RinoxAppContent(
                                         text = "Crafted by Rifad Hasan",
                                         style = TextStyle(
                                             brush = shineBrush,
-                                            fontSize = 18.sp,
+                                            fontSize = 14.sp,
+                                            letterSpacing = (-0.4).sp,
                                             fontWeight = FontWeight.ExtraBold
                                         ),
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        softWrap = false
                                     )
                                 } else {
                                     Text(
                                         text = headerTitle,
                                         color = textColor,
-                                        fontSize = 24.sp,
+                                        fontSize = 23.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -473,26 +474,27 @@ fun RinoxAppContent(
                             }
                         }
 
-                        IconButton(onClick = { isSearchActive = true }) {
-                            Icon(Icons.Rounded.Search, contentDescription = "Search", tint = textColor)
+                        IconButton(onClick = { isSearchActive = true }, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Rounded.Search, contentDescription = "Search", tint = textColor, modifier = Modifier.size(20.dp))
                         }
-                        IconButton(onClick = {
-                            onSettingsUpdated(settings.copy(isDarkTheme = !isDark))
-                        }) {
+                        IconButton(
+                            onClick = { onSettingsUpdated(settings.copy(isDarkTheme = !isDark)) },
+                            modifier = Modifier.size(34.dp)
+                        ) {
                             Icon(
                                 if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
                                 contentDescription = "Toggle Theme",
-                                tint = textColor
+                                tint = textColor,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        IconButton(onClick = { showViewSortDialog = true }) {
-                            Icon(Icons.Rounded.GridView, contentDescription = "View & Sort", tint = textColor)
+                        IconButton(onClick = { showViewSortDialog = true }, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Rounded.GridView, contentDescription = "View & Sort", tint = textColor, modifier = Modifier.size(20.dp))
                         }
-                        IconButton(onClick = { activeScreen = 2 }) {
-                            Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = textColor)
+                        IconButton(onClick = { activeScreen = 2 }, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = textColor, modifier = Modifier.size(20.dp))
                         }
                     }
-
                     if (activeScreen == 0 && openedFolder == null) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(
@@ -857,7 +859,6 @@ fun RinoxAppContent(
             }
         )
     }
-
     videoToMove?.let { vid ->
         TargetFolderPickerDialog(
             title = "Move Video to...",
@@ -901,6 +902,7 @@ fun RinoxAppContent(
             }
         )
     }
+
     videoProperties?.let { vid ->
         PropertiesInfoDialog(
             title = "Video Properties",
@@ -938,7 +940,6 @@ fun RinoxAppContent(
             }
         )
     }
-
     folderToCopy?.let { fld ->
         TargetFolderPickerDialog(
             title = "Copy Folder '${fld.name}' to...",
