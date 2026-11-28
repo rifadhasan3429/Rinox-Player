@@ -13,8 +13,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
 import androidx.compose.material.icons.rounded.*
@@ -39,7 +41,6 @@ import androidx.compose.ui.unit.sp
 import com.rinox.videoplayer.data.*
 import com.rinox.videoplayer.ui.theme.DarkCard
 import com.rinox.videoplayer.ui.theme.RinoxBlue
-import com.rinox.videoplayer.ui.theme.RinoxCyan
 import com.rinox.videoplayer.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -145,6 +146,7 @@ fun FolderCardItem(
     var menuExpanded by remember { mutableStateOf(false) }
     val titleColor = if (isDark) Color.White else Color(0xFF111318)
     val subColor = if (isDark) Color(0xFF9AA3B2) else Color(0xFF5A6270)
+    val menuBg = if (isDark) DarkCard else Color.White
     val unwatchedCount = remember(folder.videos) { folder.videos.count { !it.isWatched } }
 
     Row(
@@ -196,36 +198,36 @@ fun FolderCardItem(
             DropdownMenu(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
-                modifier = Modifier.background(DarkCard)
+                modifier = Modifier.background(menuBg)
             ) {
                 DropdownMenuItem(
-                    text = { Text("Play All", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.PlayArrow, null, tint = RinoxCyan) },
+                    text = { Text("Play All", color = titleColor) },
+                    leadingIcon = { Icon(Icons.Rounded.PlayArrow, null, tint = accentColor) },
                     onClick = { menuExpanded = false; onPlayAll() }
                 )
                 DropdownMenuItem(
-                    text = { Text("Rename Folder", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = Color.White) },
+                    text = { Text("Rename Folder", color = titleColor) },
+                    leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = titleColor) },
                     onClick = { menuExpanded = false; onRenameFolder() }
                 )
                 DropdownMenuItem(
-                    text = { Text("Copy Folder to...", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, tint = Color.White) },
+                    text = { Text("Copy Folder to...", color = titleColor) },
+                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, tint = titleColor) },
                     onClick = { menuExpanded = false; onCopyFolder() }
                 )
                 DropdownMenuItem(
-                    text = { Text("Move Folder to...", color = Color.White) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, null, tint = Color.White) },
+                    text = { Text("Move Folder to...", color = titleColor) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, null, tint = titleColor) },
                     onClick = { menuExpanded = false; onMoveFolder() }
                 )
                 DropdownMenuItem(
-                    text = { Text("Hide Folder", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null, tint = Color.White) },
+                    text = { Text("Hide Folder", color = titleColor) },
+                    leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null, tint = titleColor) },
                     onClick = { menuExpanded = false; onHideFolder() }
                 )
                 DropdownMenuItem(
-                    text = { Text("Properties", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.Info, null, tint = Color.White) },
+                    text = { Text("Properties", color = titleColor) },
+                    leadingIcon = { Icon(Icons.Rounded.Info, null, tint = titleColor) },
                     onClick = { menuExpanded = false; onProperties() }
                 )
                 DropdownMenuItem(
@@ -392,6 +394,8 @@ fun VideoCardItem(
                     VideoOptionsDropdown(
                         expanded = menuExpanded,
                         onDismiss = { menuExpanded = false },
+                        isDark = isDark,
+                        accentColor = accentColor,
                         isPrivate = video.isPrivate,
                         onPlay = onPlay,
                         onRename = onRename,
@@ -479,6 +483,8 @@ fun VideoCardItem(
                 VideoOptionsDropdown(
                     expanded = menuExpanded,
                     onDismiss = { menuExpanded = false },
+                    isDark = isDark,
+                    accentColor = accentColor,
                     isPrivate = video.isPrivate,
                     onPlay = onPlay,
                     onRename = onRename,
@@ -497,6 +503,8 @@ fun VideoCardItem(
 private fun VideoOptionsDropdown(
     expanded: Boolean,
     onDismiss: () -> Unit,
+    isDark: Boolean,
+    accentColor: Color,
     isPrivate: Boolean,
     onPlay: () -> Unit,
     onRename: () -> Unit,
@@ -507,55 +515,58 @@ private fun VideoOptionsDropdown(
     onProperties: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val menuBg = if (isDark) DarkCard else Color.White
+    val textColor = if (isDark) Color.White else Color(0xFF111318)
+
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        modifier = Modifier.background(DarkCard)
+        modifier = Modifier.background(menuBg)
     ) {
         DropdownMenuItem(
-            text = { Text("Play", color = Color.White) },
-            leadingIcon = { Icon(Icons.Rounded.PlayArrow, null, tint = RinoxCyan) },
+            text = { Text("Play", color = textColor) },
+            leadingIcon = { Icon(Icons.Rounded.PlayArrow, null, tint = accentColor) },
             onClick = { onDismiss(); onPlay() }
         )
         DropdownMenuItem(
-            text = { Text("Rename", color = Color.White) },
-            leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = Color.White) },
+            text = { Text("Rename", color = textColor) },
+            leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = textColor) },
             onClick = { onDismiss(); onRename() }
         )
         DropdownMenuItem(
-            text = { Text("Copy to...", color = Color.White) },
-            leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, tint = Color.White) },
+            text = { Text("Copy to...", color = textColor) },
+            leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, tint = textColor) },
             onClick = { onDismiss(); onCopyTo() }
         )
         DropdownMenuItem(
-            text = { Text("Move to...", color = Color.White) },
-            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, null, tint = Color.White) },
+            text = { Text("Move to...", color = textColor) },
+            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, null, tint = textColor) },
             onClick = { onDismiss(); onMoveTo() }
         )
         DropdownMenuItem(
             text = {
                 Text(
                     if (isPrivate) "Unhide from Privacy" else "Move to Privacy",
-                    color = Color.White
+                    color = textColor
                 )
             },
             leadingIcon = {
                 Icon(
                     if (isPrivate) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
                     null,
-                    tint = RinoxCyan
+                    tint = accentColor
                 )
             },
             onClick = { onDismiss(); onTogglePrivacy() }
         )
         DropdownMenuItem(
-            text = { Text("Share", color = Color.White) },
-            leadingIcon = { Icon(Icons.Rounded.Share, null, tint = Color.White) },
+            text = { Text("Share", color = textColor) },
+            leadingIcon = { Icon(Icons.Rounded.Share, null, tint = textColor) },
             onClick = { onDismiss(); onShare() }
         )
         DropdownMenuItem(
-            text = { Text("Properties", color = Color.White) },
-            leadingIcon = { Icon(Icons.Rounded.Info, null, tint = Color.White) },
+            text = { Text("Properties", color = textColor) },
+            leadingIcon = { Icon(Icons.Rounded.Info, null, tint = textColor) },
             onClick = { onDismiss(); onProperties() }
         )
         DropdownMenuItem(
@@ -572,6 +583,7 @@ fun ViewAndSortDialog(
     currentSortOption: SortOption,
     currentSortDirection: SortDirection,
     currentFields: BrowserCardFields,
+    isDark: Boolean,
     accentColor: Color,
     onDismiss: () -> Unit,
     onApply: (BrowserViewMode, BrowserLayoutMode, SortOption, SortDirection, BrowserCardFields) -> Unit
@@ -583,15 +595,26 @@ fun ViewAndSortDialog(
     var fields by remember { mutableStateOf(currentFields) }
     var fieldsExpanded by remember { mutableStateOf(false) }
 
+    val dialogBg = if (isDark) DarkCard else Color.White
+    val titleColor = if (isDark) Color.White else Color(0xFF111318)
+    val subColor = if (isDark) Color.LightGray else Color(0xFF5A6270)
+    val itemBg = if (isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFF1F4F9)
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = DarkCard,
+        containerColor = dialogBg,
         title = {
-            Text("View & Sort", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("View & Sort", color = titleColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("View", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("View", color = subColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                     BrowserViewMode.entries.forEach { mode ->
                         val active = selectedView == mode
@@ -600,15 +623,16 @@ fun ViewAndSortDialog(
                             onClick = { selectedView = mode },
                             label = { Text(mode.label, fontSize = 11.sp, maxLines = 1) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accentColor.copy(alpha = 0.25f),
-                                selectedLabelColor = accentColor
+                                selectedContainerColor = accentColor.copy(alpha = 0.2f),
+                                selectedLabelColor = accentColor,
+                                labelColor = titleColor
                             ),
                             modifier = Modifier.weight(1f)
                         )
                     }
                 }
 
-                Text("Layout", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("Layout", color = subColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     BrowserLayoutMode.entries.forEach { layout ->
                         val active = selectedLayout == layout
@@ -624,14 +648,15 @@ fun ViewAndSortDialog(
                             },
                             label = { Text(layout.label, fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accentColor.copy(alpha = 0.25f),
-                                selectedLabelColor = accentColor
+                                selectedContainerColor = accentColor.copy(alpha = 0.2f),
+                                selectedLabelColor = accentColor,
+                                labelColor = titleColor
                             ),
                             modifier = Modifier.weight(1f)
                         )
                     }
                 }
-                Text("Sort by", color = Color.LightGray, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("Sort by", color = subColor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -644,7 +669,7 @@ fun ViewAndSortDialog(
                         Row(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (active) accentColor.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f))
+                                .background(if (active) accentColor.copy(alpha = 0.2f) else itemBg)
                                 .clickable { selectedSort = opt }
                                 .padding(horizontal = 8.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -658,7 +683,7 @@ fun ViewAndSortDialog(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = opt.label,
-                                color = if (active) Color.White else Color.LightGray,
+                                color = if (active) accentColor else titleColor,
                                 fontSize = 12.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -673,8 +698,8 @@ fun ViewAndSortDialog(
                         OutlinedButton(
                             onClick = { selectedDir = dir },
                             colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (active) accentColor.copy(alpha = 0.2f) else Color.Transparent,
-                                contentColor = if (active) accentColor else Color.LightGray
+                                containerColor = if (active) accentColor.copy(alpha = 0.18f) else Color.Transparent,
+                                contentColor = if (active) accentColor else subColor
                             ),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -693,27 +718,27 @@ fun ViewAndSortDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
+                        .background(itemBg)
                         .clickable { fieldsExpanded = !fieldsExpanded }
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Fields (Card Badges)", color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Text("Fields (Card Badges)", color = titleColor, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                     Icon(
                         if (fieldsExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                         contentDescription = null,
-                        tint = Color.LightGray
+                        tint = subColor
                     )
                 }
 
                 if (fieldsExpanded) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        FieldToggleRow("Resolution (1080p/4K)", fields.showResolution) { fields = fields.copy(showResolution = it) }
-                        FieldToggleRow("File Size", fields.showSize) { fields = fields.copy(showSize = it) }
-                        FieldToggleRow("Frame Rate (FPS)", fields.showFps) { fields = fields.copy(showFps = it) }
-                        FieldToggleRow("File Extension (MKV/MP4)", fields.showExtension) { fields = fields.copy(showExtension = it) }
-                        FieldToggleRow("Folder Path", fields.showPath) { fields = fields.copy(showPath = it) }
-                        FieldToggleRow("NEW Badge", fields.showNewTag) { fields = fields.copy(showNewTag = it) }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FieldToggleRow("Resolution (1080p/4K)", fields.showResolution, titleColor) { fields = fields.copy(showResolution = it) }
+                        FieldToggleRow("File Size", fields.showSize, titleColor) { fields = fields.copy(showSize = it) }
+                        FieldToggleRow("Frame Rate (FPS)", fields.showFps, titleColor) { fields = fields.copy(showFps = it) }
+                        FieldToggleRow("File Extension (MKV/MP4)", fields.showExtension, titleColor) { fields = fields.copy(showExtension = it) }
+                        FieldToggleRow("Folder Path", fields.showPath, titleColor) { fields = fields.copy(showPath = it) }
+                        FieldToggleRow("NEW Badge", fields.showNewTag, titleColor) { fields = fields.copy(showNewTag = it) }
                     }
                 }
             }
@@ -734,21 +759,21 @@ fun ViewAndSortDialog(
     )
 }
 @Composable
-private fun FieldToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun FieldToggleRow(label: String, checked: Boolean, textColor: Color, onCheckedChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 2.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Checkbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            modifier = Modifier.size(28.dp)
+            modifier = Modifier.size(24.dp)
         )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(label, color = Color.LightGray, fontSize = 12.sp)
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(label, color = textColor, fontSize = 13.sp)
     }
 }
 
@@ -756,6 +781,7 @@ private fun FieldToggleRow(label: String, checked: Boolean, onCheckedChange: (Bo
 fun TargetFolderPickerDialog(
     title: String,
     folders: List<File>,
+    isDark: Boolean,
     accentColor: Color,
     onDismiss: () -> Unit,
     onSelectFolder: (File) -> Unit
@@ -763,12 +789,22 @@ fun TargetFolderPickerDialog(
     var newFolderName by remember { mutableStateOf("") }
     var showCreateInput by remember { mutableStateOf(false) }
 
+    val dialogBg = if (isDark) DarkCard else Color.White
+    val titleColor = if (isDark) Color.White else Color(0xFF111318)
+    val itemBg = if (isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFF1F4F9)
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = DarkCard,
-        title = { Text(title, color = Color.White, fontWeight = FontWeight.Bold) },
+        containerColor = dialogBg,
+        title = { Text(title, color = titleColor, fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 TextButton(onClick = { showCreateInput = !showCreateInput }) {
                     Icon(Icons.Rounded.CreateNewFolder, contentDescription = null, tint = accentColor)
                     Spacer(modifier = Modifier.width(6.dp))
@@ -800,26 +836,24 @@ fun TargetFolderPickerDialog(
                     }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    folders.take(12).forEach { dir ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color.White.copy(alpha = 0.06f))
-                                .clickable {
-                                    onSelectFolder(dir)
-                                    onDismiss()
-                                }
-                                .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Rounded.Folder, contentDescription = null, tint = accentColor)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(dir.name, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text(dir.absolutePath, color = Color.Gray, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                folders.take(15).forEach { dir ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(itemBg)
+                            .clickable {
+                                onSelectFolder(dir)
+                                onDismiss()
                             }
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Folder, contentDescription = null, tint = accentColor)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(dir.name, color = titleColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(dir.absolutePath, color = Color.Gray, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -835,16 +869,19 @@ fun TargetFolderPickerDialog(
 fun RenameItemDialog(
     title: String,
     initialName: String,
+    isDark: Boolean,
     accentColor: Color,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
     var textValue by remember { mutableStateOf(initialName) }
+    val dialogBg = if (isDark) DarkCard else Color.White
+    val titleColor = if (isDark) Color.White else Color(0xFF111318)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = DarkCard,
-        title = { Text(title, color = Color.White, fontWeight = FontWeight.Bold) },
+        containerColor = dialogBg,
+        title = { Text(title, color = titleColor, fontWeight = FontWeight.Bold) },
         text = {
             OutlinedTextField(
                 value = textValue,
@@ -873,19 +910,24 @@ fun RenameItemDialog(
 fun PropertiesInfoDialog(
     title: String,
     details: List<Pair<String, String>>,
+    isDark: Boolean,
     accentColor: Color,
     onDismiss: () -> Unit
 ) {
+    val dialogBg = if (isDark) DarkCard else Color.White
+    val titleColor = if (isDark) Color.White else Color(0xFF111318)
+    val valColor = if (isDark) Color.LightGray else Color(0xFF3E4552)
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = DarkCard,
-        title = { Text(title, color = Color.White, fontWeight = FontWeight.Bold) },
+        containerColor = dialogBg,
+        title = { Text(title, color = titleColor, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 details.forEach { (key, value) ->
                     Column {
                         Text(key, color = accentColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text(value, color = Color.LightGray, fontSize = 13.sp)
+                        Text(value, color = valColor, fontSize = 13.sp)
                     }
                 }
             }
