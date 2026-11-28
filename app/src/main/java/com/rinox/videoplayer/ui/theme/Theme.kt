@@ -10,6 +10,7 @@ val DarkBg = Color(0xFF0A0D12)
 val DarkCard = Color(0xFF141923)
 val LightBg = Color(0xFFF6F8FB)
 
+val RinoxBlue = Color(0xFF2196F3)
 val RinoxCyan = Color(0xFF00E5FF)
 val RinoxPurple = Color(0xFFBB86FC)
 val RinoxEmerald = Color(0xFF00E676)
