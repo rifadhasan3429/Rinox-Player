@@ -33,7 +33,7 @@ android {
         abortOnError = false
     }
 
-        signingConfigs {
+    signingConfigs {
         create("release") {
             storeFile = file("release.jks")
             storePassword = System.getenv("KEY_PASSWORD")
@@ -104,4 +104,7 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
+
+    // Jellyfin Media3 FFmpeg Decoder (10-bit HEVC/MKV & AC3/EAC3/DTS SW/HW+ Support)
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1")
 }
