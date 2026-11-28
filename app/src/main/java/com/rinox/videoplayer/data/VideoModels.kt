@@ -2,6 +2,31 @@ package com.rinox.videoplayer.data
 
 import android.net.Uri
 
+data class AppSettings(
+    val isDarkTheme: Boolean = true,
+    val accentIndex: Int = 0,
+    val showFolderDuration: Boolean = false,
+    val showNewBadge: Boolean = true,
+    val showSubtitleBadge: Boolean = true,
+    val showVideoSize: Boolean = false,
+    val showVideoFps: Boolean = false,
+    val isGridView: Boolean = false,
+    val seekStepSeconds: Int = 10,
+    val swipeSeekSensitivity: Float = 1.0f,
+    val enableEdgeSwipes: Boolean = true,
+    val resumePlayback: Boolean = true,
+    val defaultDecoder: String = "HW",
+    val smoothPerformanceMode: Boolean = false,
+    val autoHeadphonePlay: Boolean = true,
+    val pauseOnUnplug: Boolean = true,
+    val defaultAudioLang: String = "Auto",
+    val defaultSubLang: String = "Auto",
+    val subFontSize: Int = 18,
+    val autoLoadSubtitles: Boolean = true,
+    val privacyPin: String = "",
+    val useBiometric: Boolean = false
+)
+
 data class VideoItem(
     val id: Long,
     val title: String,
