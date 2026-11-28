@@ -28,6 +28,7 @@ data class TrackInfoItem(
     val trackIndex: Int,
     val isSelected: Boolean
 )
+
 @OptIn(UnstableApi::class)
 class RinoxPlayerEngine(private val context: Context) {
 
@@ -42,13 +43,14 @@ class RinoxPlayerEngine(private val context: Context) {
     fun buildPlayer(
         decoderMode: String,
         onErrorFallback: (String) -> Unit,
+        onFatalError: (String) -> Unit,
         onVideoEnded: () -> Unit,
         onTracksChanged: () -> Unit
     ): ExoPlayer {
         release()
         activeDecoderMode = decoderMode
 
-        // HW = Hardware, HW+ = Hybrid (HW Video + FFmpeg 5.1 Audio), SW = Full FFmpeg 10-bit/5.1
+        // HW = Hardware, HW+ = Hybrid (HW Video + FFmpeg Audio), SW = Full FFmpeg 10-bit/5.1
         val extMode = when (decoderMode) {
             "SW" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
             "HW+" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
@@ -60,7 +62,7 @@ class RinoxPlayerEngine(private val context: Context) {
             .setEnableDecoderFallback(true)
 
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(1000, 15000, 250, 500)
+            .setBufferDurationsMs(1500, 20000, 250, 500)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
@@ -68,6 +70,8 @@ class RinoxPlayerEngine(private val context: Context) {
             parameters = buildUponParameters()
                 .setPreferredTextLanguage("en")
                 .setSelectUndeterminedTextLanguage(true)
+                .setAllowVideoMixedMimeTypeAdaptiveness(true)
+                .setAllowAudioMixedMimeTypeAdaptiveness(true)
                 .build()
         }
         trackSelector = selector
@@ -90,6 +94,22 @@ class RinoxPlayerEngine(private val context: Context) {
                 when (activeDecoderMode) {
                     "HW" -> onErrorFallback("HW+")
                     "HW+" -> onErrorFallback("SW")
+                    else -> {
+                        val reason = when (error.errorCode) {
+                            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+                                "Video file is missing or moved from storage."
+                            PlaybackException.ERROR_CODE_DECODING_FAILED,
+                            PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+                            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
+                                "Unsupported video/audio codec (${error.errorCodeName})."
+                            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+                            PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ->
+                                "Corrupted or unsupported media container format."
+                            else ->
+                                "${error.localizedMessage ?: "Unknown playback error"} (${error.errorCodeName})"
+                        }
+                        onFatalError(reason)
+                    }
                 }
             }
 
