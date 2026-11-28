@@ -24,6 +24,7 @@ class VideoRepository(private val context: Context) {
 
     suspend fun loadAllMedia(
         settings: AppSettings,
+        settingsManager: SettingsManager,
         viewMode: BrowserViewMode = BrowserViewMode.ALL_FOLDERS,
         sortOption: SortOption = SortOption.TITLE,
         sortDirection: SortDirection = SortDirection.ASCENDING
@@ -31,6 +32,7 @@ class VideoRepository(private val context: Context) {
         val allVideos = mutableListOf<VideoItem>()
         val positionPrefs = context.getSharedPreferences("rinox_positions", Context.MODE_PRIVATE)
         val allPositions = positionPrefs.all
+        val excludedSet = settingsManager.getExcludedFolders()
 
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -53,7 +55,6 @@ class VideoRepository(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             projection.add(MediaStore.Video.Media.CAPTURE_FRAMERATE)
         }
-
         val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
 
         try {
@@ -87,10 +88,10 @@ class VideoRepository(private val context: Context) {
                     val folderPath = parentFile.absolutePath
                     val folderName = parentFile.name.ifEmpty { "Internal Storage" }
 
-                    if (!settings.showHiddenFiles && (file.name.startsWith(".") || folderName.startsWith("."))) {
+                    if (file.name.startsWith(".") || folderName.startsWith(".")) {
                         continue
                     }
-                    if (settings.excludedFolders.any { ex -> folderPath.equals(ex, ignoreCase = true) }) {
+                    if (excludedSet.any { ex -> folderPath.equals(ex, ignoreCase = true) }) {
                         continue
                     }
 
@@ -124,7 +125,7 @@ class VideoRepository(private val context: Context) {
                             dateAddedSec = dateAdded,
                             mimeType = mime,
                             fps = fps,
-                            isWatched = settings.watchedVideoPaths.contains(path),
+                            isWatched = settingsManager.isVideoWatched(path),
                             isPrivate = false,
                             lastPositionMs = savedPos
                         )
@@ -194,8 +195,6 @@ class VideoRepository(private val context: Context) {
         }
         return folders.sortedWith(comparator)
     }
-
-    // Natural Episode Serial Comparator: Episode 1, Episode 2 ... Episode 10
     fun naturalCompare(s1: String, s2: String): Int {
         var i1 = 0
         var i2 = 0
@@ -228,6 +227,7 @@ class VideoRepository(private val context: Context) {
         }
         return len1.compareTo(len2)
     }
+
     suspend fun getAvailableTargetFolders(existingFolders: List<VideoFolder>): List<File> = withContext(Dispatchers.IO) {
         val folderSet = linkedSetOf<String>()
         val rootDir = Environment.getExternalStorageDirectory()
@@ -240,7 +240,6 @@ class VideoRepository(private val context: Context) {
         existingFolders.forEach { folderSet.add(it.path) }
         folderSet.map { File(it) }.filter { it.exists() && it.isDirectory }
     }
-
     suspend fun renameVideo(video: VideoItem, newBaseName: String): Boolean = withContext(Dispatchers.IO) {
         val cleanName = newBaseName.trim().replace(Regex("[\\\\/:*?\"<>|]"), "_")
         if (cleanName.isEmpty()) return@withContext false
