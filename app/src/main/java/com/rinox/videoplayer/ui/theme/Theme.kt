@@ -6,44 +6,46 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val AmoledBlack = Color(0xFF000000)
-val DarkSurface = Color(0xFF0E1218)
-val DarkCard = Color(0xFF161B22)
-val LightBg = Color(0xFFF6F8FA)
-val LightCard = Color(0xFFFFFFFF)
-val RinoxBlue = Color(0xFF2196F3)
+val DarkBg = Color(0xFF0A0D12)
+val DarkCard = Color(0xFF141923)
+val LightBg = Color(0xFFF6F8FB)
+
 val RinoxCyan = Color(0xFF00E5FF)
-val TextPrimary = Color(0xFFFFFFFF)
-val TextSecondary = Color(0xFF8B949E)
+val RinoxPurple = Color(0xFFBB86FC)
+val RinoxEmerald = Color(0xFF00E676)
+val RinoxAmber = Color(0xFFFFB300)
+val RinoxCrimson = Color(0xFFFF5252)
 
 @Composable
 fun RinoxPlayerTheme(
     darkTheme: Boolean = true,
-    accentColor: Color = RinoxBlue,
+    accentColor: Color = RinoxCyan,
     content: @Composable () -> Unit
 ) {
-    val colors = if (darkTheme) {
+    val colorScheme = if (darkTheme) {
         darkColorScheme(
             primary = accentColor,
-            secondary = RinoxCyan,
-            background = AmoledBlack,
-            surface = DarkSurface,
-            surfaceVariant = DarkCard,
+            secondary = accentColor,
+            background = DarkBg,
+            surface = DarkCard,
+            onPrimary = Color.Black,
             onBackground = Color.White,
-            onSurface = Color.White,
-            onSurfaceVariant = Color(0xFF8B949E)
+            onSurface = Color.White
         )
     } else {
         lightColorScheme(
             primary = accentColor,
-            secondary = RinoxBlue,
+            secondary = accentColor,
             background = LightBg,
-            surface = LightCard,
-            surfaceVariant = Color(0xFFEAEEF2),
-            onBackground = Color(0xFF1F2328),
-            onSurface = Color(0xFF1F2328),
-            onSurfaceVariant = Color(0xFF656D76)
+            surface = Color.White,
+            onPrimary = Color.White,
+            onBackground = Color(0xFF111318),
+            onSurface = Color(0xFF111318)
         )
     }
-    MaterialTheme(colorScheme = colors, content = content)
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        content = content
+    )
 }
