@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.util.Size
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -12,6 +13,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
@@ -21,7 +23,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size as ComposeSize
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -29,19 +36,209 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rinox.videoplayer.data.BrowserCardFields
-import com.rinox.videoplayer.data.BrowserLayoutMode
-import com.rinox.videoplayer.data.BrowserViewMode
-import com.rinox.videoplayer.data.SortDirection
-import com.rinox.videoplayer.data.SortOption
-import com.rinox.videoplayer.data.VideoFolder
-import com.rinox.videoplayer.data.VideoItem
+import com.rinox.videoplayer.data.*
 import com.rinox.videoplayer.ui.theme.DarkCard
+import com.rinox.videoplayer.ui.theme.RinoxBlue
 import com.rinox.videoplayer.ui.theme.RinoxCyan
 import com.rinox.videoplayer.utils.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+@Composable
+fun CustomFolderVectorIcon(
+    folderName: String,
+    badgeCount: Int,
+    modifier: Modifier = Modifier
+) {
+    val lower = folderName.lowercase()
+    val overlayIcon = when {
+        lower.contains("camera") || lower.contains("dcim") -> Icons.Rounded.PhotoCamera
+        lower.contains("download") -> Icons.Rounded.ArrowDownward
+        lower.contains("movie") || lower.contains("video") || lower.contains("film") -> Icons.Rounded.Movie
+        lower.contains("screenshot") -> Icons.Rounded.Smartphone
+        lower.contains("whatsapp") || lower.contains("messenger") || lower.contains("telegram") -> Icons.Rounded.Forum
+        else -> null
+    }
+
+    Box(modifier = modifier.size(62.dp)) {
+        Canvas(
+            modifier = Modifier
+                .size(54.dp)
+                .align(Alignment.BottomStart)
+        ) {
+            val w = size.width
+            val h = size.height
+
+            // Back tab of folder
+            val tabPath = Path().apply {
+                moveTo(w * 0.08f, h * 0.24f)
+                lineTo(w * 0.08f, h * 0.14f)
+                quadraticTo(w * 0.08f, h * 0.08f, w * 0.16f, h * 0.08f)
+                lineTo(w * 0.40f, h * 0.08f)
+                lineTo(w * 0.48f, h * 0.18f)
+                lineTo(w * 0.88f, h * 0.18f)
+                quadraticTo(w * 0.94f, h * 0.18f, w * 0.94f, h * 0.26f)
+                lineTo(w * 0.94f, h * 0.40f)
+                lineTo(w * 0.08f, h * 0.40f)
+                close()
+            }
+            drawPath(path = tabPath, color = Color(0xFF1976D2))
+
+            // Front body of folder with gradient
+            drawRoundRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xFF42A5F5), Color(0xFF2196F3))
+                ),
+                topLeft = Offset(w * 0.06f, h * 0.22f),
+                size = ComposeSize(w * 0.90f, h * 0.68f),
+                cornerRadius = CornerRadius(w * 0.14f, w * 0.14f)
+            )
+        }
+
+        if (overlayIcon != null) {
+            Icon(
+                imageVector = overlayIcon,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.88f),
+                modifier = Modifier
+                    .size(20.dp)
+                    .align(Alignment.Center)
+                    .offset(x = (-3).dp, y = 6.dp)
+            )
+        }
+
+        if (badgeCount > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (-2).dp, y = 2.dp)
+                    .defaultMinSize(minWidth = 22.dp, minHeight = 22.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE53935))
+                    .padding(horizontal = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (badgeCount > 99) "99+" else badgeCount.toString(),
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun FolderCardItem(
+    folder: VideoFolder,
+    isDark: Boolean,
+    accentColor: Color,
+    showFolderDuration: Boolean = false,
+    onClick: () -> Unit,
+    onPlayAll: () -> Unit,
+    onRenameFolder: () -> Unit,
+    onCopyFolder: () -> Unit,
+    onMoveFolder: () -> Unit,
+    onHideFolder: () -> Unit,
+    onProperties: () -> Unit,
+    onDeleteFolder: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    val titleColor = if (isDark) Color.White else Color(0xFF111318)
+    val subColor = if (isDark) Color(0xFF9AA3B2) else Color(0xFF5A6270)
+    val unwatchedCount = remember(folder.videos) { folder.videos.count { !it.isWatched } }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { menuExpanded = true }
+            )
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CustomFolderVectorIcon(
+            folderName = folder.name,
+            badgeCount = unwatchedCount
+        )
+
+        Spacer(modifier = Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = folder.name,
+                color = titleColor,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(3.dp))
+            val subText = if (showFolderDuration && folder.totalDurationMs > 0L) {
+                "${folder.videoCount} videos • ${FormatUtils.formatDuration(folder.totalDurationMs)}"
+            } else {
+                "${folder.videoCount} videos"
+            }
+            Text(
+                text = subText,
+                color = subColor,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(Icons.Rounded.MoreVert, contentDescription = "Folder Options", tint = subColor.copy(alpha = 0.75f))
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+                modifier = Modifier.background(DarkCard)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Play All", color = Color.White) },
+                    leadingIcon = { Icon(Icons.Rounded.PlayArrow, null, tint = RinoxCyan) },
+                    onClick = { menuExpanded = false; onPlayAll() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Rename Folder", color = Color.White) },
+                    leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = Color.White) },
+                    onClick = { menuExpanded = false; onRenameFolder() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Copy Folder to...", color = Color.White) },
+                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, tint = Color.White) },
+                    onClick = { menuExpanded = false; onCopyFolder() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Move Folder to...", color = Color.White) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, null, tint = Color.White) },
+                    onClick = { menuExpanded = false; onMoveFolder() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Hide Folder", color = Color.White) },
+                    leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null, tint = Color.White) },
+                    onClick = { menuExpanded = false; onHideFolder() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Properties", color = Color.White) },
+                    leadingIcon = { Icon(Icons.Rounded.Info, null, tint = Color.White) },
+                    onClick = { menuExpanded = false; onProperties() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete Folder", color = Color(0xFFEF5350)) },
+                    leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = Color(0xFFEF5350)) },
+                    onClick = { menuExpanded = false; onDeleteFolder() }
+                )
+            }
+        }
+    }
+}
 @Composable
 fun VideoThumbnailBox(
     video: VideoItem,
@@ -120,136 +317,6 @@ fun VideoThumbnailBox(
                         .fillMaxWidth(video.watchProgressFraction)
                         .fillMaxHeight()
                         .background(Color(0xFFE53935))
-                )
-            }
-        }
-    }
-}
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun FolderCardItem(
-    folder: VideoFolder,
-    isDark: Boolean,
-    accentColor: Color,
-    onClick: () -> Unit,
-    onPlayAll: () -> Unit,
-    onRenameFolder: () -> Unit,
-    onCopyFolder: () -> Unit,
-    onMoveFolder: () -> Unit,
-    onHideFolder: () -> Unit,
-    onProperties: () -> Unit,
-    onDeleteFolder: () -> Unit
-) {
-    var menuExpanded by remember { mutableStateOf(false) }
-    val cardBg = if (isDark) DarkCard else Color(0xFFF3F5F8)
-    val titleColor = if (isDark) Color.White else Color(0xFF111318)
-    val subColor = if (isDark) Color(0xFF9AA3B2) else Color(0xFF5A6270)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(cardBg)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = { menuExpanded = true }
-            )
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(accentColor.copy(alpha = 0.16f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Folder,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = folder.name,
-                    color = titleColor,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (folder.hasUnwatched) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(accentColor.copy(alpha = 0.2f))
-                            .padding(horizontal = 5.dp, vertical = 1.dp)
-                    ) {
-                        Text("NEW", color = accentColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = "${folder.videoCount} videos • ${FormatUtils.formatSize(folder.totalSizeBytes)}",
-                color = subColor,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        Box {
-            IconButton(onClick = { menuExpanded = true }) {
-                Icon(Icons.Rounded.MoreVert, contentDescription = "Folder Options", tint = subColor)
-            }
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-                modifier = Modifier.background(DarkCard)
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Play All", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.PlayArrow, null, tint = RinoxCyan) },
-                    onClick = { menuExpanded = false; onPlayAll() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Rename Folder", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = Color.White) },
-                    onClick = { menuExpanded = false; onRenameFolder() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Copy Folder to...", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, null, tint = Color.White) },
-                    onClick = { menuExpanded = false; onCopyFolder() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Move Folder to...", color = Color.White) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, null, tint = Color.White) },
-                    onClick = { menuExpanded = false; onMoveFolder() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Hide Folder", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.VisibilityOff, null, tint = Color.White) },
-                    onClick = { menuExpanded = false; onHideFolder() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Properties", color = Color.White) },
-                    leadingIcon = { Icon(Icons.Rounded.Info, null, tint = Color.White) },
-                    onClick = { menuExpanded = false; onProperties() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Delete Folder", color = Color(0xFFEF5350)) },
-                    leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = Color(0xFFEF5350)) },
-                    onClick = { menuExpanded = false; onDeleteFolder() }
                 )
             }
         }
@@ -353,16 +420,15 @@ fun VideoCardItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(cardBg)
+                .clip(RoundedCornerShape(12.dp))
                 .combinedClickable(onClick = onClick, onLongClick = { menuExpanded = true })
-                .padding(10.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             VideoThumbnailBox(
                 video = video,
                 accentColor = accentColor,
-                modifier = Modifier.size(width = 116.dp, height = 68.dp)
+                modifier = Modifier.size(width = 116.dp, height = 66.dp)
             )
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -382,10 +448,10 @@ fun VideoCardItem(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(accentColor.copy(alpha = 0.2f))
+                                .background(RinoxBlue.copy(alpha = 0.18f))
                                 .padding(horizontal = 5.dp, vertical = 1.dp)
                         ) {
-                            Text("NEW", color = accentColor, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text("NEW", color = RinoxBlue, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.width(6.dp))
                     }
