@@ -1,5 +1,6 @@
 package com.rinox.videoplayer.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,11 +18,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rinox.videoplayer.data.AppSettings
 import com.rinox.videoplayer.ui.theme.*
+import com.rinox.videoplayer.utils.GitHubReleaseInfo
+import com.rinox.videoplayer.utils.GitHubUpdateChecker
+import kotlinx.coroutines.launch
 
 val AccentPalette = listOf(
     Color(0xFF2196F3),
@@ -39,13 +44,17 @@ fun SettingsScreen(
     onRescanLibrary: () -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showPinDialog by remember { mutableStateOf(false) }
     var pinInput by remember { mutableStateOf("") }
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var availableRelease by remember { mutableStateOf<GitHubReleaseInfo?>(null) }
+
     val bgMain = MaterialTheme.colorScheme.background
     val textMain = MaterialTheme.colorScheme.onBackground
     val textSub = MaterialTheme.colorScheme.onSurfaceVariant
     val cardSurface = MaterialTheme.colorScheme.surfaceVariant
-
     Scaffold(
         containerColor = bgMain,
         topBar = {
@@ -125,7 +134,6 @@ fun SettingsScreen(
                     )
                 }
             }
-
             item {
                 SettingsCategoryCard(title = "2. Media Library & Privacy", icon = Icons.Rounded.Lock) {
                     Button(
@@ -179,7 +187,6 @@ fun SettingsScreen(
                     )
                 }
             }
-
             item {
                 SettingsCategoryCard(title = "4. Hybrid Decoder Engine", icon = Icons.Rounded.Memory) {
                     Text("Default Decoder Priority: ${settings.defaultDecoder}", color = textMain, fontSize = 14.sp)
@@ -215,7 +222,6 @@ fun SettingsScreen(
                     )
                 }
             }
-
             item {
                 SettingsCategoryCard(title = "6. Subtitle Engine", icon = Icons.Rounded.Subtitles) {
                     SettingSwitchRow(
@@ -234,15 +240,42 @@ fun SettingsScreen(
             }
 
             item {
-                SettingsCategoryCard(title = "7. About Rinox Player", icon = Icons.Rounded.Info) {
-                    Text("Rinox Player v1.0.0 (64-Bit ARM64)", color = textMain, fontWeight = FontWeight.SemiBold)
-                    Text("100% Offline • Zero-Load Engine • AMOLED & Light", color = textSub, fontSize = 13.sp)
+                SettingsCategoryCard(title = "7. About Rinox Player & Updates", icon = Icons.Rounded.Info) {
+                    val currentVer = remember { GitHubUpdateChecker.getCurrentAppVersion(context) }
+                    Text("Rinox Player v$currentVer (64-Bit ARM64)", color = textMain, fontWeight = FontWeight.SemiBold)
+                    Text("Crafted by Rifad Hasan • Zero-Load Engine", color = textSub, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = {
+                            if (!isCheckingUpdate) {
+                                isCheckingUpdate = true
+                                scope.launch {
+                                    val rel = GitHubUpdateChecker.checkForUpdate(context)
+                                    isCheckingUpdate = false
+                                    if (rel != null) {
+                                        availableRelease = rel
+                                    } else {
+                                        Toast.makeText(context, "You are using the latest version!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = RinoxBlue),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Rounded.SystemUpdate, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            if (isCheckingUpdate) "Checking GitHub Releases..." else "Check for Updates",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
-
     if (showPinDialog) {
         AlertDialog(
             onDismissRequest = { showPinDialog = false },
@@ -270,8 +303,35 @@ fun SettingsScreen(
             }
         )
     }
-}
 
+    availableRelease?.let { rel ->
+        AlertDialog(
+            onDismissRequest = { availableRelease = null },
+            title = { Text("New Update Available! (${rel.tagName})", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("A newer version of Rinox Player is available on GitHub:", fontSize = 13.sp)
+                    Text(rel.releaseNotes, fontSize = 12.sp, color = textSub)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val target = rel
+                        availableRelease = null
+                        GitHubUpdateChecker.downloadAndInstallApk(context, target)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RinoxBlue)
+                ) {
+                    Text("Update Now", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { availableRelease = null }) { Text("Later") }
+            }
+        )
+    }
+}
 @Composable
 private fun SettingsCategoryCard(
     title: String,
