@@ -40,7 +40,6 @@ class RinoxPlayerEngine(private val context: Context) {
     var activeDecoderMode: String = "HW"
         private set
 
-    // Universal World Subtitle Format Detector (SRT, ASS, SSA, VTT, TTML, XML, DFXP, SUB, SMI, STL)
     fun detectSubtitleMimeType(fileNameOrUri: String): String {
         val lower = fileNameOrUri.lowercase()
         return when {
@@ -48,7 +47,7 @@ class RinoxPlayerEngine(private val context: Context) {
             lower.endsWith(".ass") || lower.endsWith(".ssa") -> MimeTypes.TEXT_SSA
             lower.endsWith(".ttml") || lower.endsWith(".xml") || lower.endsWith(".dfxp") -> MimeTypes.APPLICATION_TTML
             lower.endsWith(".sub") -> MimeTypes.APPLICATION_SUBRIP
-            lower.endsWith(".smi") || lower.endsWith(".sami") -> MimeTypes.APPLICATION_SAMI
+            lower.endsWith(".smi") || lower.endsWith(".sami") -> "application/x-sami"
             lower.endsWith(".stl") -> MimeTypes.APPLICATION_CEA608
             else -> MimeTypes.APPLICATION_SUBRIP
         }
@@ -181,7 +180,6 @@ class RinoxPlayerEngine(private val context: Context) {
                         )
                     }
                 }
-                // Also scan language-tagged subtitles like Movie.en.srt or Movie.bn.ass
                 parent?.listFiles()?.forEach { candidate ->
                     val cName = candidate.name
                     val cExt = candidate.extension.lowercase()
