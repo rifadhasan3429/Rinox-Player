@@ -19,8 +19,8 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 import java.io.File
-
 data class TrackInfoItem(
     val id: String,
     val label: String,
@@ -39,7 +39,6 @@ class RinoxPlayerEngine(private val context: Context) {
     private var nativeEqualizer: Equalizer? = null
     var activeDecoderMode: String = "HW"
         private set
-
     fun buildPlayer(
         decoderMode: String,
         onErrorFallback: (String) -> Unit,
@@ -50,19 +49,19 @@ class RinoxPlayerEngine(private val context: Context) {
         release()
         activeDecoderMode = decoderMode
 
-        // HW = Hardware, HW+ = Hybrid (HW Video + FFmpeg Audio), SW = Full FFmpeg 10-bit/5.1
+        // HW = Hardware, HW+ = Hybrid (HW + NextLib FFmpeg), SW = Full NextLib FFmpeg 10-bit/5.1
         val extMode = when (decoderMode) {
             "SW" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
             "HW+" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
             else -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
         }
 
-        val renderersFactory = DefaultRenderersFactory(context)
+        val renderersFactory = NextRenderersFactory(context)
             .setExtensionRendererMode(extMode)
             .setEnableDecoderFallback(true)
 
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(1500, 20000, 250, 500)
+            .setBufferDurationsMs(2500, 30000, 500, 1000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
@@ -75,7 +74,6 @@ class RinoxPlayerEngine(private val context: Context) {
                 .build()
         }
         trackSelector = selector
-
         val audioAttrs = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
@@ -198,7 +196,6 @@ class RinoxPlayerEngine(private val context: Context) {
         player.prepare()
         player.playWhenReady = true
     }
-
     fun applySmoothVolume(volumePercent: Int) {
         val player = exoPlayer ?: return
         try {
@@ -235,7 +232,6 @@ class RinoxPlayerEngine(private val context: Context) {
             listOf("Normal", "Bass Boost", "Cinema", "Pop", "Rock", "Vocal")
         }
     }
-
     fun applyEqualizerPreset(presetIndex: Int) {
         val player = exoPlayer ?: return
         try {
@@ -279,7 +275,6 @@ class RinoxPlayerEngine(private val context: Context) {
         }
         return result
     }
-
     fun selectTrack(trackType: @C.TrackType Int, groupIndex: Int, trackIndex: Int) {
         val player = exoPlayer ?: return
         val selector = trackSelector ?: return
