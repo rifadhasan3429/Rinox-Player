@@ -1,6 +1,7 @@
 package com.rinox.videoplayer
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -15,8 +16,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -34,9 +40,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
 import com.rinox.videoplayer.data.*
 import com.rinox.videoplayer.ui.components.*
 import com.rinox.videoplayer.ui.screens.AccentPalette
@@ -51,6 +61,7 @@ import com.rinox.videoplayer.ui.screens.SettingsScreen
 import com.rinox.videoplayer.ui.screens.VideoPlayerScreen
 import com.rinox.videoplayer.ui.theme.*
 import com.rinox.videoplayer.utils.FormatUtils
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 class MainActivity : ComponentActivity() {
@@ -76,11 +87,21 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val context = LocalContext.current
+            val view = LocalView.current
             val settingsManager = remember { SettingsManager(context) }
             var settings: AppSettings by remember { mutableStateOf(settingsManager.loadSettings()) }
 
             val isDark = settings.isDarkTheme
-            val accentColor = AccentPalette.getOrElse(settings.accentIndex) { RinoxCyan }
+            val accentColor = AccentPalette.getOrElse(settings.accentIndex) { RinoxBlue }
+
+            // Ensure status bar icons (clock, battery, network) are clearly visible in BOTH Light and Dark UI
+            SideEffect {
+                val window = (view.context as? Activity)?.window
+                if (window != null) {
+                    window.statusBarColor = android.graphics.Color.TRANSPARENT
+                    WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDark
+                }
+            }
 
             RinoxPlayerTheme(darkTheme = isDark, accentColor = accentColor) {
                 Surface(
@@ -133,12 +154,30 @@ fun RinoxAppContent(
         hasPermission = checkStoragePermission(context)
     }
 
+    // Shining developer signature visible for 3.5 seconds on app launch
+    var showSignature by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        delay(3500L)
+        showSignature = false
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "sigShine")
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = -200f,
+        targetValue = 600f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer"
+    )
+
     var viewMode by remember { mutableStateOf(BrowserViewMode.ALL_FOLDERS) }
     var layoutMode by remember {
         mutableStateOf(if (settings.isGridView) BrowserLayoutMode.GRID else BrowserLayoutMode.LIST)
     }
-    var sortOption by remember { mutableStateOf(SortOption.TITLE) }
-    var sortDirection by remember { mutableStateOf(SortDirection.ASCENDING) }
+    var sortOption by remember { mutableStateOf(SortOption.DATE) }
+    var sortDirection by remember { mutableStateOf(SortDirection.DESCENDING) }
     var cardFields by remember {
         mutableStateOf(
             BrowserCardFields(
@@ -152,7 +191,7 @@ fun RinoxAppContent(
 
     var isSearchActive by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var activeScreen by remember { mutableIntStateOf(0) } // 0 = Home, 1 = Privacy, 2 = Settings
     var openedFolder by remember { mutableStateOf<VideoFolder?>(null) }
 
     var folders by remember { mutableStateOf<List<VideoFolder>>(emptyList()) }
@@ -242,12 +281,14 @@ fun RinoxAppContent(
         return
     }
 
-    BackHandler(enabled = openedFolder != null || isSearchActive) {
-        if (isSearchActive) {
-            isSearchActive = false
-            searchQuery = ""
-        } else if (openedFolder != null) {
-            openedFolder = null
+    BackHandler(enabled = openedFolder != null || isSearchActive || activeScreen != 0) {
+        when {
+            isSearchActive -> {
+                isSearchActive = false
+                searchQuery = ""
+            }
+            activeScreen != 0 -> activeScreen = 0
+            openedFolder != null -> openedFolder = null
         }
     }
 
@@ -259,7 +300,7 @@ fun RinoxAppContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(Icons.Rounded.VideoLibrary, contentDescription = null, tint = accentColor, modifier = Modifier.size(64.dp))
+            Icon(Icons.Rounded.VideoLibrary, contentDescription = null, tint = RinoxBlue, modifier = Modifier.size(64.dp))
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 "Storage Access Required",
@@ -291,137 +332,222 @@ fun RinoxAppContent(
                         } catch (_: Exception) {}
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                colors = ButtonDefaults.buttonColors(containerColor = RinoxBlue)
             ) {
                 Text("Grant Storage Permission", fontWeight = FontWeight.Bold)
             }
         }
         return
     }
+    if (activeScreen == 2) {
+        SettingsScreen(
+            settings = settings,
+            onUpdateSettings = onSettingsUpdated,
+            onRescanLibrary = { refreshMedia() },
+            onBack = { activeScreen = 0 }
+        )
+        return
+    }
+
     val textColor = if (isDark) Color.White else Color(0xFF111318)
     val subTextColor = if (isDark) Color(0xFF9AA3B2) else Color(0xFF5A6270)
+    val chipBg = if (isDark) DarkCard else Color(0xFFEBF0F5)
 
     Scaffold(
         containerColor = if (isDark) DarkBg else LightBg,
         topBar = {
-            if (selectedTab == 0) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    if (isSearchActive) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp)
-                                .clip(CircleShape)
-                                .background(if (isDark) DarkCard else Color(0xFFECEFF4))
-                                .border(1.dp, accentColor.copy(alpha = 0.45f), CircleShape)
-                                .padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                if (isSearchActive) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .clip(CircleShape)
+                            .background(chipBg)
+                            .border(1.dp, RinoxBlue.copy(alpha = 0.45f), CircleShape)
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                isSearchActive = false
+                                searchQuery = ""
+                            },
+                            modifier = Modifier.size(32.dp)
                         ) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Close Search", tint = textColor, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                            if (searchQuery.isEmpty()) {
+                                Text("Search videos or folders...", color = subTextColor, fontSize = 14.sp)
+                            }
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                singleLine = true,
+                                textStyle = TextStyle(color = textColor, fontSize = 14.sp),
+                                cursorBrush = SolidColor(RinoxBlue),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        if (searchQuery.isNotEmpty()) {
                             IconButton(
-                                onClick = {
-                                    isSearchActive = false
-                                    searchQuery = ""
-                                },
-                                modifier = Modifier.size(32.dp)
+                                onClick = { searchQuery = "" },
+                                modifier = Modifier.size(30.dp)
                             ) {
-                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Close Search", tint = textColor, modifier = Modifier.size(20.dp))
-                            }
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                                if (searchQuery.isEmpty()) {
-                                    Text("Search videos or folders...", color = subTextColor, fontSize = 14.sp)
-                                }
-                                BasicTextField(
-                                    value = searchQuery,
-                                    onValueChange = { searchQuery = it },
-                                    singleLine = true,
-                                    textStyle = TextStyle(color = textColor, fontSize = 14.sp),
-                                    cursorBrush = SolidColor(accentColor),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { searchQuery = "" },
-                                    modifier = Modifier.size(30.dp)
-                                ) {
-                                    Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = subTextColor, modifier = Modifier.size(18.dp))
-                                }
+                                Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = subTextColor, modifier = Modifier.size(18.dp))
                             }
                         }
-                    } else {
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (activeScreen == 1 || openedFolder != null) {
+                            IconButton(onClick = {
+                                if (activeScreen == 1) activeScreen = 0 else openedFolder = null
+                            }) {
+                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = textColor)
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            val headerTitle = when {
+                                activeScreen == 1 -> "Privacy Vault"
+                                openedFolder != null -> openedFolder!!.name
+                                viewMode == BrowserViewMode.FILES -> "All Videos"
+                                else -> "Folders"
+                            }
+                            Text(
+                                text = headerTitle,
+                                color = textColor,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            AnimatedVisibility(
+                                visible = showSignature && activeScreen == 0 && openedFolder == null,
+                                enter = fadeIn(),
+                                exit = fadeOut(animationSpec = tween(600))
+                            ) {
+                                val shineBrush = Brush.linearGradient(
+                                    colors = listOf(
+                                        RinoxBlue,
+                                        Color(0xFF80D8FF),
+                                        Color.White,
+                                        RinoxBlue
+                                    ),
+                                    start = Offset(shimmerOffset - 120f, 0f),
+                                    end = Offset(shimmerOffset + 120f, 0f)
+                                )
+                                Text(
+                                    text = "Crafted by Rifad Hasan",
+                                    style = TextStyle(
+                                        brush = shineBrush,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                            }
+                        }
+
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(Icons.Rounded.Search, contentDescription = "Search", tint = textColor)
+                        }
+                        IconButton(onClick = {
+                            onSettingsUpdated(settings.copy(isDarkTheme = !isDark))
+                        }) {
+                            Icon(
+                                if (isDark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                                contentDescription = "Toggle Theme",
+                                tint = textColor
+                            )
+                        }
+                        IconButton(onClick = { showViewSortDialog = true }) {
+                            Icon(Icons.Rounded.GridView, contentDescription = "View & Sort", tint = textColor)
+                        }
+                        IconButton(onClick = { activeScreen = 2 }) {
+                            Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = textColor)
+                        }
+                    }
+
+                    // Original Pill Chip Row: Privacy | All Videos | Sort
+                    if (activeScreen == 0 && openedFolder == null) {
+                        Spacer(modifier = Modifier.height(10.dp))
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (openedFolder != null) {
-                                IconButton(onClick = { openedFolder = null }) {
-                                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = textColor)
-                                }
-                                Text(
-                                    text = openedFolder!!.name,
-                                    color = textColor,
-                                    fontSize = 19.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            } else {
-                                Text(
-                                    text = "Rinox Player",
-                                    color = textColor,
-                                    fontSize = 21.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.weight(1f)
-                                )
+                            Row(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(chipBg)
+                                    .clickable { activeScreen = 1 }
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Rounded.Lock, contentDescription = null, tint = subTextColor, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text("Privacy", color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             }
 
-                            IconButton(onClick = { isSearchActive = true }) {
-                                Icon(Icons.Rounded.Search, contentDescription = "Search", tint = textColor)
+                            val isAllFiles = viewMode == BrowserViewMode.FILES
+                            Row(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(if (isAllFiles) RinoxBlue.copy(alpha = 0.18f) else chipBg)
+                                    .clickable {
+                                        viewMode = if (isAllFiles) BrowserViewMode.ALL_FOLDERS else BrowserViewMode.FILES
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Rounded.VideoLibrary, contentDescription = null, tint = if (isAllFiles) RinoxBlue else subTextColor, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text("All Videos", color = if (isAllFiles) RinoxBlue else textColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             }
-                            IconButton(onClick = { showViewSortDialog = true }) {
-                                Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = "View & Sort", tint = textColor)
-                            }
-                            IconButton(onClick = { refreshMedia() }) {
-                                Icon(Icons.Rounded.Refresh, contentDescription = "Refresh", tint = textColor)
+
+                            Row(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(chipBg)
+                                    .clickable { showViewSortDialog = true }
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = null, tint = subTextColor, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(sortOption.label, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
                 }
             }
         },
-        bottomBar = {
-            NavigationBar(
-                containerColor = if (isDark) DarkCard else Color.White,
-                tonalElevation = 4.dp
-            ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Rounded.VideoLibrary, contentDescription = "Videos") },
-                    label = { Text("Videos") },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = accentColor, selectedTextColor = accentColor)
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Rounded.Lock, contentDescription = "Privacy") },
-                    label = { Text("Privacy") },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = accentColor, selectedTextColor = accentColor)
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Rounded.Settings, contentDescription = "Settings") },
-                    label = { Text("Settings") },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = accentColor, selectedTextColor = accentColor)
-                )
+        floatingActionButton = {
+            if (activeScreen == 0 && allVideos.isNotEmpty()) {
+                FloatingActionButton(
+                    onClick = {
+                        val lastPath = settingsManager.getLastPlayedPath()
+                        val targetIdx = if (!lastPath.isNullOrEmpty()) {
+                            allVideos.indexOfFirst { it.path == lastPath }.coerceAtLeast(0)
+                        } else 0
+                        activePlaylist = allVideos
+                        activeIndex = targetIdx
+                    },
+                    shape = CircleShape,
+                    containerColor = RinoxBlue,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Resume Last Video", modifier = Modifier.size(30.dp))
+                }
             }
         }
     ) { innerPadding ->
@@ -430,232 +556,221 @@ fun RinoxAppContent(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (selectedTab) {
-                0 -> {
-                    val query = searchQuery.trim()
-                    val filteredFolders = remember(folders, query) {
-                        if (query.isEmpty()) folders
-                        else folders.filter { it.name.contains(query, ignoreCase = true) }
-                    }
-                    val filteredVideos = remember(allVideos, openedFolder, query) {
-                        val baseList = openedFolder?.videos ?: allVideos
-                        if (query.isEmpty()) baseList
-                        else baseList.filter { it.displayName.contains(query, ignoreCase = true) }
-                    }
-
-                    if (isLoading && folders.isEmpty() && allVideos.isEmpty()) {
-                        CircularProgressIndicator(color = accentColor, modifier = Modifier.align(Alignment.Center))
-                    } else if (openedFolder != null || viewMode == BrowserViewMode.FILES || query.isNotEmpty()) {
-                        if (filteredVideos.isEmpty()) {
-                            Text("No videos found", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
-                        } else if (layoutMode == BrowserLayoutMode.GRID) {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(2),
-                                contentPadding = PaddingValues(12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(filteredVideos, key = { it.path }) { video ->
-                                    val idx = filteredVideos.indexOf(video)
-                                    VideoCardItem(
-                                        video = video,
-                                        isDark = isDark,
-                                        accentColor = accentColor,
-                                        fields = cardFields,
-                                        isGrid = true,
-                                        onClick = { activePlaylist = filteredVideos; activeIndex = idx },
-                                        onPlay = { activePlaylist = filteredVideos; activeIndex = idx },
-                                        onRename = { videoToRename = video },
-                                        onCopyTo = {
-                                            scope.launch {
-                                                availableTargetDirs = repository.getAvailableTargetFolders(folders)
-                                                videoToCopy = video
-                                            }
-                                        },
-                                        onMoveTo = {
-                                            scope.launch {
-                                                availableTargetDirs = repository.getAvailableTargetFolders(folders)
-                                                videoToMove = video
-                                            }
-                                        },
-                                        onTogglePrivacy = {
-                                            scope.launch {
-                                                if (repository.moveToPrivateVault(video)) {
-                                                    Toast.makeText(context, "Moved to Privacy Vault", Toast.LENGTH_SHORT).show()
-                                                    refreshMedia()
-                                                }
-                                            }
-                                        },
-                                        onShare = { shareVideoFile(context, video) },
-                                        onProperties = { videoProperties = video },
-                                        onDelete = { videoToDelete = video }
-                                    )
+            if (activeScreen == 1) {
+                if (settings.privacyPin.isNotEmpty() && !isPrivacyUnlocked) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Rounded.Lock, contentDescription = null, tint = RinoxBlue, modifier = Modifier.size(56.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Enter Privacy PIN", color = textColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = pinInput,
+                            onValueChange = {
+                                pinInput = it
+                                if (it == settings.privacyPin) {
+                                    isPrivacyUnlocked = true
+                                    pinInput = ""
                                 }
-                            }
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(filteredVideos, key = { it.path }) { video ->
-                                    val idx = filteredVideos.indexOf(video)
-                                    VideoCardItem(
-                                        video = video,
-                                        isDark = isDark,
-                                        accentColor = accentColor,
-                                        fields = cardFields,
-                                        isGrid = false,
-                                        onClick = { activePlaylist = filteredVideos; activeIndex = idx },
-                                        onPlay = { activePlaylist = filteredVideos; activeIndex = idx },
-                                        onRename = { videoToRename = video },
-                                        onCopyTo = {
-                                            scope.launch {
-                                                availableTargetDirs = repository.getAvailableTargetFolders(folders)
-                                                videoToCopy = video
-                                            }
-                                        },
-                                        onMoveTo = {
-                                            scope.launch {
-                                                availableTargetDirs = repository.getAvailableTargetFolders(folders)
-                                                videoToMove = video
-                                            }
-                                        },
-                                        onTogglePrivacy = {
-                                            scope.launch {
-                                                if (repository.moveToPrivateVault(video)) {
-                                                    Toast.makeText(context, "Moved to Privacy Vault", Toast.LENGTH_SHORT).show()
-                                                    refreshMedia()
-                                                }
-                                            }
-                                        },
-                                        onShare = { shareVideoFile(context, video) },
-                                        onProperties = { videoProperties = video },
-                                        onDelete = { videoToDelete = video }
-                                    )
-                                }
-                            }
-                        }
+                            },
+                            singleLine = true,
+                            placeholder = { Text("4-digit PIN") }
+                        )
+                    }
+                } else {
+                    if (privateVideos.isEmpty()) {
+                        Text("Privacy Vault is empty", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
                     } else {
-                        if (filteredFolders.isEmpty()) {
-                            Text("No video folders found", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(filteredFolders, key = { it.path }) { folder ->
-                                    FolderCardItem(
-                                        folder = folder,
-                                        isDark = isDark,
-                                        accentColor = accentColor,
-                                        onClick = { openedFolder = folder },
-                                        onPlayAll = {
-                                            if (folder.videos.isNotEmpty()) {
-                                                activePlaylist = folder.videos
-                                                activeIndex = 0
-                                            }
-                                        },
-                                        onRenameFolder = { folderToRename = folder },
-                                        onCopyFolder = {
-                                            scope.launch {
-                                                availableTargetDirs = repository.getAvailableTargetFolders(folders)
-                                                folderToCopy = folder
-                                            }
-                                        },
-                                        onMoveFolder = {
-                                            scope.launch {
-                                                availableTargetDirs = repository.getAvailableTargetFolders(folders)
-                                                folderToMove = folder
-                                            }
-                                        },
-                                        onHideFolder = {
-                                            settingsManager.toggleExcludedFolder(folder.path)
-                                            Toast.makeText(context, "Folder hidden", Toast.LENGTH_SHORT).show()
-                                            refreshMedia()
-                                        },
-                                        onProperties = { folderProperties = folder },
-                                        onDeleteFolder = { folderToDelete = folder }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                1 -> {
-                    if (settings.privacyPin.isNotEmpty() && !isPrivacyUnlocked) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        LazyColumn(
+                            contentPadding = PaddingValues(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            Icon(Icons.Rounded.Lock, contentDescription = null, tint = accentColor, modifier = Modifier.size(56.dp))
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("Enter Privacy PIN", color = textColor, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            OutlinedTextField(
-                                value = pinInput,
-                                onValueChange = {
-                                    pinInput = it
-                                    if (it == settings.privacyPin) {
-                                        isPrivacyUnlocked = true
-                                        pinInput = ""
-                                    }
-                                },
-                                singleLine = true,
-                                placeholder = { Text("4-digit PIN") }
-                            )
-                        }
-                    } else {
-                        if (privateVideos.isEmpty()) {
-                            Text("Privacy Vault is empty", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(privateVideos, key = { it.path }) { pVid ->
-                                    val idx = privateVideos.indexOf(pVid)
-                                    VideoCardItem(
-                                        video = pVid,
-                                        isDark = isDark,
-                                        accentColor = accentColor,
-                                        fields = cardFields,
-                                        onClick = { activePlaylist = privateVideos; activeIndex = idx },
-                                        onPlay = { activePlaylist = privateVideos; activeIndex = idx },
-                                        onRename = { videoToRename = pVid },
-                                        onCopyTo = {},
-                                        onMoveTo = {},
-                                        onTogglePrivacy = {
-                                            scope.launch {
-                                                if (repository.unhideFromPrivateVault(pVid)) {
-                                                    Toast.makeText(context, "Unhidden to Gallery", Toast.LENGTH_SHORT).show()
-                                                    refreshMedia()
-                                                }
+                            items(privateVideos, key = { it.path }) { pVid ->
+                                val idx = privateVideos.indexOf(pVid)
+                                VideoCardItem(
+                                    video = pVid,
+                                    isDark = isDark,
+                                    accentColor = RinoxBlue,
+                                    fields = cardFields,
+                                    onClick = { activePlaylist = privateVideos; activeIndex = idx },
+                                    onPlay = { activePlaylist = privateVideos; activeIndex = idx },
+                                    onRename = { videoToRename = pVid },
+                                    onCopyTo = {},
+                                    onMoveTo = {},
+                                    onTogglePrivacy = {
+                                        scope.launch {
+                                            if (repository.unhideFromPrivateVault(pVid)) {
+                                                Toast.makeText(context, "Unhidden to Gallery", Toast.LENGTH_SHORT).show()
+                                                refreshMedia()
                                             }
-                                        },
-                                        onShare = { shareVideoFile(context, pVid) },
-                                        onProperties = { videoProperties = pVid },
-                                        onDelete = { videoToDelete = pVid }
-                                    )
-                                }
+                                        }
+                                    },
+                                    onShare = { shareVideoFile(context, pVid) },
+                                    onProperties = { videoProperties = pVid },
+                                    onDelete = { videoToDelete = pVid }
+                                )
                             }
                         }
                     }
                 }
+            } else {
+                val query = searchQuery.trim()
+                val filteredFolders = remember(folders, query) {
+                    if (query.isEmpty()) folders
+                    else folders.filter { it.name.contains(query, ignoreCase = true) }
+                }
+                val filteredVideos = remember(allVideos, openedFolder, query) {
+                    val baseList = openedFolder?.videos ?: allVideos
+                    if (query.isEmpty()) baseList
+                    else baseList.filter { it.displayName.contains(query, ignoreCase = true) }
+                }
 
-                2 -> {
-                    SettingsScreen(
-                        settings = settings,
-                        onUpdateSettings = onSettingsUpdated,
-                        onRescanLibrary = { refreshMedia() },
-                        onBack = { selectedTab = 0 }
-                    )
+                if (isLoading && folders.isEmpty() && allVideos.isEmpty()) {
+                    CircularProgressIndicator(color = RinoxBlue, modifier = Modifier.align(Alignment.Center))
+                } else if (openedFolder != null || viewMode == BrowserViewMode.FILES || query.isNotEmpty()) {
+                    if (filteredVideos.isEmpty()) {
+                        Text("No videos found", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
+                    } else if (layoutMode == BrowserLayoutMode.GRID) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            contentPadding = PaddingValues(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(filteredVideos, key = { it.path }) { video ->
+                                val idx = filteredVideos.indexOf(video)
+                                VideoCardItem(
+                                    video = video,
+                                    isDark = isDark,
+                                    accentColor = RinoxBlue,
+                                    fields = cardFields,
+                                    isGrid = true,
+                                    onClick = { activePlaylist = filteredVideos; activeIndex = idx },
+                                    onPlay = { activePlaylist = filteredVideos; activeIndex = idx },
+                                    onRename = { videoToRename = video },
+                                    onCopyTo = {
+                                        scope.launch {
+                                            availableTargetDirs = repository.getAvailableTargetFolders(folders)
+                                            videoToCopy = video
+                                        }
+                                    },
+                                    onMoveTo = {
+                                        scope.launch {
+                                            availableTargetDirs = repository.getAvailableTargetFolders(folders)
+                                            videoToMove = video
+                                        }
+                                    },
+                                    onTogglePrivacy = {
+                                        scope.launch {
+                                            if (repository.moveToPrivateVault(video)) {
+                                                Toast.makeText(context, "Moved to Privacy Vault", Toast.LENGTH_SHORT).show()
+                                                refreshMedia()
+                                            }
+                                        }
+                                    },
+                                    onShare = { shareVideoFile(context, video) },
+                                    onProperties = { videoProperties = video },
+                                    onDelete = { videoToDelete = video }
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(filteredVideos, key = { it.path }) { video ->
+                                val idx = filteredVideos.indexOf(video)
+                                VideoCardItem(
+                                    video = video,
+                                    isDark = isDark,
+                                    accentColor = RinoxBlue,
+                                    fields = cardFields,
+                                    isGrid = false,
+                                    onClick = { activePlaylist = filteredVideos; activeIndex = idx },
+                                    onPlay = { activePlaylist = filteredVideos; activeIndex = idx },
+                                    onRename = { videoToRename = video },
+                                    onCopyTo = {
+                                        scope.launch {
+                                            availableTargetDirs = repository.getAvailableTargetFolders(folders)
+                                            videoToCopy = video
+                                        }
+                                    },
+                                    onMoveTo = {
+                                        scope.launch {
+                                            availableTargetDirs = repository.getAvailableTargetFolders(folders)
+                                            videoToMove = video
+                                        }
+                                    },
+                                    onTogglePrivacy = {
+                                        scope.launch {
+                                            if (repository.moveToPrivateVault(video)) {
+                                                Toast.makeText(context, "Moved to Privacy Vault", Toast.LENGTH_SHORT).show()
+                                                refreshMedia()
+                                            }
+                                        }
+                                    },
+                                    onShare = { shareVideoFile(context, video) },
+                                    onProperties = { videoProperties = video },
+                                    onDelete = { videoToDelete = video }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    if (filteredFolders.isEmpty()) {
+                        Text("No video folders found", color = Color.Gray, modifier = Modifier.align(Alignment.Center))
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(filteredFolders, key = { it.path }) { folder ->
+                                FolderCardItem(
+                                    folder = folder,
+                                    isDark = isDark,
+                                    accentColor = RinoxBlue,
+                                    showFolderDuration = settings.showFolderDuration,
+                                    onClick = { openedFolder = folder },
+                                    onPlayAll = {
+                                        if (folder.videos.isNotEmpty()) {
+                                            activePlaylist = folder.videos
+                                            activeIndex = 0
+                                        }
+                                    },
+                                    onRenameFolder = { folderToRename = folder },
+                                    onCopyFolder = {
+                                        scope.launch {
+                                            availableTargetDirs = repository.getAvailableTargetFolders(folders)
+                                            folderToCopy = folder
+                                        }
+                                    },
+                                    onMoveFolder = {
+                                        scope.launch {
+                                            availableTargetDirs = repository.getAvailableTargetFolders(folders)
+                                            folderToMove = folder
+                                        }
+                                    },
+                                    onHideFolder = {
+                                        settingsManager.toggleExcludedFolder(folder.path)
+                                        Toast.makeText(context, "Folder hidden", Toast.LENGTH_SHORT).show()
+                                        refreshMedia()
+                                    },
+                                    onProperties = { folderProperties = folder },
+                                    onDeleteFolder = { folderToDelete = folder }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -667,7 +782,7 @@ fun RinoxAppContent(
             currentSortOption = sortOption,
             currentSortDirection = sortDirection,
             currentFields = cardFields,
-            accentColor = accentColor,
+            accentColor = RinoxBlue,
             onDismiss = { showViewSortDialog = false },
             onApply = { vMode, lMode, sOpt, sDir, flds ->
                 viewMode = vMode
@@ -691,7 +806,7 @@ fun RinoxAppContent(
         RenameItemDialog(
             title = "Rename Video",
             initialName = File(vid.path).nameWithoutExtension,
-            accentColor = accentColor,
+            accentColor = RinoxBlue,
             onDismiss = { videoToRename = null },
             onConfirm = { newName ->
                 scope.launch {
@@ -710,7 +825,7 @@ fun RinoxAppContent(
         TargetFolderPickerDialog(
             title = "Copy Video to...",
             folders = availableTargetDirs,
-            accentColor = accentColor,
+            accentColor = RinoxBlue,
             onDismiss = { videoToCopy = null },
             onSelectFolder = { targetDir ->
                 scope.launch {
@@ -730,7 +845,7 @@ fun RinoxAppContent(
         TargetFolderPickerDialog(
             title = "Move Video to...",
             folders = availableTargetDirs,
-            accentColor = accentColor,
+            accentColor = RinoxBlue,
             onDismiss = { videoToMove = null },
             onSelectFolder = { targetDir ->
                 scope.launch {
@@ -780,7 +895,7 @@ fun RinoxAppContent(
                 "Frame Rate" to "${vid.fps} FPS",
                 "Format" to vid.mimeType
             ),
-            accentColor = accentColor,
+            accentColor = RinoxBlue,
             onDismiss = { videoProperties = null }
         )
     }
@@ -789,7 +904,7 @@ fun RinoxAppContent(
         RenameItemDialog(
             title = "Rename Folder",
             initialName = fld.name,
-            accentColor = accentColor,
+            accentColor = RinoxBlue,
             onDismiss = { folderToRename = null },
             onConfirm = { newName ->
                 scope.launch {
@@ -808,7 +923,7 @@ fun RinoxAppContent(
         TargetFolderPickerDialog(
             title = "Copy Folder '${fld.name}' to...",
             folders = availableTargetDirs,
-            accentColor = accentColor,
+            accentColor = RinoxBlue,
             onDismiss = { folderToCopy = null },
             onSelectFolder = { targetDir ->
                 scope.launch {
@@ -826,7 +941,7 @@ fun RinoxAppContent(
         TargetFolderPickerDialog(
             title = "Move Folder '${fld.name}' to...",
             folders = availableTargetDirs,
-            accentColor = accentColor,
+            accentColor = RinoxBlue,
             onDismiss = { folderToMove = null },
             onSelectFolder = { targetDir ->
                 scope.launch {
@@ -873,7 +988,7 @@ fun RinoxAppContent(
                 "Total Size" to FormatUtils.formatSize(fld.totalSizeBytes),
                 "Total Duration" to FormatUtils.formatDuration(fld.totalDurationMs)
             ),
-            accentColor = accentColor,
+            accentColor = RinoxBlue,
             onDismiss = { folderProperties = null }
         )
     }
