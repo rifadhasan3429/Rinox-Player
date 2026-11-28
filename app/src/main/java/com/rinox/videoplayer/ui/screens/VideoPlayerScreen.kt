@@ -3,13 +3,17 @@ package com.rinox.videoplayer.ui.screens
 import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Color as AndroidColor
 import android.media.AudioManager
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Build
 import android.util.Rational
 import android.util.TypedValue
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
@@ -98,8 +102,8 @@ fun VideoPlayerScreen(
     var backgroundPlayEnabled by remember { mutableStateOf(false) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     var is2xHolding by remember { mutableStateOf(false) }
+    var playbackErrorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Custom Subtitle File Picker (.srt / .ass / .vtt)
     var customSubUri by remember { mutableStateOf<Uri?>(null) }
     var customSubName by remember { mutableStateOf<String?>(null) }
     val subPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -144,9 +148,51 @@ fun VideoPlayerScreen(
     var selectedEqPreset by remember { mutableIntStateOf(-1) }
     var audioTracks by remember { mutableStateOf<List<TrackInfoItem>>(emptyList()) }
     var subTracks by remember { mutableStateOf<List<TrackInfoItem>>(emptyList()) }
+    DisposableEffect(Unit) {
+        val mediaSession = MediaSession(context, "RinoxPlayerMediaGuard").apply {
+            setCallback(object : MediaSession.Callback() {
+                override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
+                    val keyEvent: KeyEvent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                    }
+                    if (keyEvent != null && (
+                                keyEvent.keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
+                                keyEvent.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+                                keyEvent.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
+                                keyEvent.keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE
+                            )
+                    ) {
+                        return true
+                    }
+                    return super.onMediaButtonEvent(mediaButtonIntent)
+                }
+            })
+            val state = PlaybackState.Builder()
+                .setActions(
+                    PlaybackState.ACTION_PLAY or
+                        PlaybackState.ACTION_PAUSE or
+                        PlaybackState.ACTION_PLAY_PAUSE
+                )
+                .setState(PlaybackState.STATE_PLAYING, 0L, 1.0f)
+                .build()
+            setPlaybackState(state)
+            isActive = true
+        }
+        onDispose {
+            try {
+                mediaSession.isActive = false
+                mediaSession.release()
+            } catch (_: Exception) {}
+        }
+    }
+
     LaunchedEffect(currentVideo.path) {
         zoomScale = 1f; panX = 0f; panY = 0f
         customSubUri = null; customSubName = null
+        playbackErrorMessage = null
         liveFps = currentVideo.fps.coerceAtLeast(24)
         activity?.requestedOrientation = if (currentVideo.height > currentVideo.width && currentVideo.width > 0) {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
@@ -155,7 +201,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Auto-fade glassmorphic lock button after 2 seconds so zero stain remains on video
     LaunchedEffect(isLocked, lockIconVisible) {
         if (isLocked && lockIconVisible) {
             delay(2000L)
@@ -182,7 +227,6 @@ fun VideoPlayerScreen(
             engine.release()
         }
     }
-
     DisposableEffect(lifecycleOwner, backgroundPlayEnabled) {
         val observer = LifecycleEventObserver { _, event ->
             val inPip = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -209,6 +253,9 @@ fun VideoPlayerScreen(
                 decoderMode = fallbackMode
                 Toast.makeText(context, "Switched to $fallbackMode Decoder", Toast.LENGTH_SHORT).show()
             },
+            onFatalError = { reason ->
+                playbackErrorMessage = reason
+            },
             onVideoEnded = {
                 context.getSharedPreferences("rinox_positions", Context.MODE_PRIVATE)
                     .edit().remove(currentVideo.path).apply()
@@ -227,6 +274,7 @@ fun VideoPlayerScreen(
         settingsManager.markVideoWatched(currentVideo.path)
         settingsManager.saveLastPlayedPath(currentVideo.path)
     }
+
     LaunchedEffect(currentVideo.path) {
         while (true) {
             delay(200L)
@@ -262,7 +310,6 @@ fun VideoPlayerScreen(
             onClose()
         }
     }
-
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
@@ -306,6 +353,7 @@ fun VideoPlayerScreen(
                     translationY = panY
                 )
         )
+
         if (isLocked && !isInPipMode) {
             Box(
                 modifier = Modifier
@@ -315,7 +363,6 @@ fun VideoPlayerScreen(
                     }
             )
         }
-
         if (!isLocked && !isInPipMode) {
             Box(
                 modifier = Modifier
@@ -564,6 +611,7 @@ fun VideoPlayerScreen(
                         }
                     }
                 }
+
                 Column(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
@@ -645,6 +693,44 @@ fun VideoPlayerScreen(
             }
         }
     }
+    if (playbackErrorMessage != null) {
+        AlertDialog(
+            onDismissRequest = {},
+            containerColor = DarkCard,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = Color(0xFFEF5350))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Playback Error", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Text(
+                    text = "Can't play this video because:\n${playbackErrorMessage}",
+                    color = Color.LightGray,
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    playbackErrorMessage = null
+                    decoderMode = "SW"
+                }) {
+                    Text("Retry (SW)", color = RinoxCyan)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    playbackErrorMessage = null
+                    engine.release()
+                    onClose()
+                }) {
+                    Text("Close", color = Color(0xFFEF5350))
+                }
+            }
+        )
+    }
+
     if (showEqDialog) {
         val presets = remember { engine.getEqualizerPresets() }
         AlertDialog(
