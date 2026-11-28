@@ -14,11 +14,13 @@
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="s1.jpg" width="18%" />
-  <img src="s2.jpg" width="18%" />
-  <img src="s3.jpg" width="18%" />
-  <img src="s4.jpg" width="18%" />
-  <img src="s5.jpg" width="18%" />
+  <img src="s1.jpg" width="22%" />
+  <img src="s2.jpg" width="22%" />
+  <img src="s3.jpg" width="22%" />
+  <img src="s4.jpg" width="22%" />
+</p>
+<p align="center">
+  <img src="s5.jpg" width="88%" />
 </p>
 
 ---
