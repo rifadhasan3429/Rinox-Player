@@ -39,6 +39,20 @@ class RinoxPlayerEngine(private val context: Context) {
     private var nativeEqualizer: Equalizer? = null
     var activeDecoderMode: String = "HW"
         private set
+
+    // Universal World Subtitle Format Detector (SRT, ASS, SSA, VTT, TTML, XML, DFXP, SUB, SMI, STL)
+    fun detectSubtitleMimeType(fileNameOrUri: String): String {
+        val lower = fileNameOrUri.lowercase()
+        return when {
+            lower.endsWith(".vtt") || lower.endsWith(".webvtt") -> MimeTypes.TEXT_VTT
+            lower.endsWith(".ass") || lower.endsWith(".ssa") -> MimeTypes.TEXT_SSA
+            lower.endsWith(".ttml") || lower.endsWith(".xml") || lower.endsWith(".dfxp") -> MimeTypes.APPLICATION_TTML
+            lower.endsWith(".sub") -> MimeTypes.APPLICATION_SUBRIP
+            lower.endsWith(".smi") || lower.endsWith(".sami") -> MimeTypes.APPLICATION_SAMI
+            lower.endsWith(".stl") -> MimeTypes.APPLICATION_CEA608
+            else -> MimeTypes.APPLICATION_SUBRIP
+        }
+    }
     fun buildPlayer(
         decoderMode: String,
         onErrorFallback: (String) -> Unit,
@@ -49,7 +63,6 @@ class RinoxPlayerEngine(private val context: Context) {
         release()
         activeDecoderMode = decoderMode
 
-        // HW = Hardware, HW+ = Hybrid (HW + NextLib FFmpeg), SW = Full NextLib FFmpeg 10-bit/5.1
         val extMode = when (decoderMode) {
             "SW" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
             "HW+" -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
@@ -137,42 +150,53 @@ class RinoxPlayerEngine(private val context: Context) {
         val subConfigs = mutableListOf<MediaItem.SubtitleConfiguration>()
 
         if (customSubUri != null) {
-            val lower = (customSubName ?: customSubUri.toString()).lowercase()
-            val mime = when {
-                lower.endsWith(".vtt") -> MimeTypes.TEXT_VTT
-                lower.endsWith(".ass") || lower.endsWith(".ssa") -> MimeTypes.TEXT_SSA
-                else -> MimeTypes.APPLICATION_SUBRIP
-            }
+            val subIdentifier = customSubName ?: customSubUri.toString()
+            val mime = detectSubtitleMimeType(subIdentifier)
             subConfigs.add(
                 MediaItem.SubtitleConfiguration.Builder(customSubUri)
                     .setMimeType(mime)
-                    .setLanguage("en")
+                    .setLanguage("und")
                     .setLabel(customSubName ?: "Selected Subtitle")
                     .setSelectionFlags(C.SELECTION_FLAG_DEFAULT or C.SELECTION_FLAG_FORCED)
                     .build()
             )
-        } else if (autoLoadSubtitles && videoPath.isNotEmpty()) {
+        }
+
+        if (autoLoadSubtitles && videoPath.isNotEmpty()) {
             try {
                 val videoFile = File(videoPath)
                 val parent = videoFile.parentFile
                 val base = videoFile.nameWithoutExtension
-                val subMap = mapOf(
-                    "srt" to MimeTypes.APPLICATION_SUBRIP,
-                    "vtt" to MimeTypes.TEXT_VTT,
-                    "ass" to MimeTypes.TEXT_SSA,
-                    "ssa" to MimeTypes.TEXT_SSA
-                )
-                subMap.forEach { (ext, mime) ->
+                val supportedExts = listOf("srt", "ass", "ssa", "vtt", "ttml", "xml", "dfxp", "sub", "smi", "sami", "stl")
+                supportedExts.forEach { ext ->
                     val subFile = File(parent, "$base.$ext")
                     if (subFile.exists() && subFile.canRead()) {
                         subConfigs.add(
                             MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(subFile))
-                                .setMimeType(mime)
-                                .setLanguage("en")
+                                .setMimeType(detectSubtitleMimeType(subFile.name))
+                                .setLanguage("und")
                                 .setLabel("External ${ext.uppercase()}")
-                                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT or C.SELECTION_FLAG_FORCED)
+                                .setSelectionFlags(if (subConfigs.isEmpty()) C.SELECTION_FLAG_DEFAULT else 0)
                                 .build()
                         )
+                    }
+                }
+                // Also scan language-tagged subtitles like Movie.en.srt or Movie.bn.ass
+                parent?.listFiles()?.forEach { candidate ->
+                    val cName = candidate.name
+                    val cExt = candidate.extension.lowercase()
+                    if (candidate.isFile && cName.startsWith("$base.", ignoreCase = true) && cExt in supportedExts) {
+                        val alreadyAdded = subConfigs.any { it.uri == Uri.fromFile(candidate) }
+                        if (!alreadyAdded) {
+                            subConfigs.add(
+                                MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(candidate))
+                                    .setMimeType(detectSubtitleMimeType(cName))
+                                    .setLanguage("und")
+                                    .setLabel(cName.removePrefix("$base."))
+                                    .setSelectionFlags(if (subConfigs.isEmpty()) C.SELECTION_FLAG_DEFAULT else 0)
+                                    .build()
+                            )
+                        }
                     }
                 }
             } catch (_: Exception) {}
