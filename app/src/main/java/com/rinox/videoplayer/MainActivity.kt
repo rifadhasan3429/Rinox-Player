@@ -17,7 +17,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -77,20 +76,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val settingsManager = remember { SettingsManager(context) }
-            val settings by settingsManager.settings.collectAsState()
+            var settings by remember { mutableStateOf(settingsManager.loadSettings()) }
 
-            val systemDark = isSystemInDarkTheme()
-            val isDark = when (settings.themeMode) {
-                "DARK" -> true
-                "LIGHT" -> false
-                else -> systemDark
-            }
-
-            val accentColor = when (settings.accentColorHex) {
-                "PURPLE" -> RinoxPurple
-                "EMERALD" -> RinoxEmerald
-                "AMBER" -> RinoxAmber
-                "CRIMSON" -> RinoxCrimson
+            val isDark = settings.isDarkTheme
+            val accentColor = when (settings.accentIndex) {
+                1 -> RinoxPurple
+                2 -> RinoxEmerald
+                3 -> RinoxAmber
+                4 -> RinoxCrimson
                 else -> RinoxCyan
             }
 
@@ -102,6 +95,10 @@ class MainActivity : ComponentActivity() {
                     RinoxAppContent(
                         settingsManager = settingsManager,
                         settings = settings,
+                        onSettingsUpdated = { updated ->
+                            settings = updated
+                            settingsManager.saveSettings(updated)
+                        },
                         isDark = isDark,
                         accentColor = accentColor,
                         isInPipMode = isInPipModeState,
@@ -124,6 +121,7 @@ class MainActivity : ComponentActivity() {
 fun RinoxAppContent(
     settingsManager: SettingsManager,
     settings: AppSettings,
+    onSettingsUpdated: (AppSettings) -> Unit,
     isDark: Boolean,
     accentColor: Color,
     isInPipMode: Boolean,
@@ -141,10 +139,20 @@ fun RinoxAppContent(
     }
 
     var viewMode by remember { mutableStateOf(BrowserViewMode.ALL_FOLDERS) }
-    var layoutMode by remember { mutableStateOf(BrowserLayoutMode.LIST) }
+    var layoutMode by remember {
+        mutableStateOf(if (settings.isGridView) BrowserLayoutMode.GRID else BrowserLayoutMode.LIST)
+    }
     var sortOption by remember { mutableStateOf(SortOption.TITLE) }
     var sortDirection by remember { mutableStateOf(SortDirection.ASCENDING) }
-    var cardFields by remember { mutableStateOf(BrowserCardFields()) }
+    var cardFields by remember {
+        mutableStateOf(
+            BrowserCardFields(
+                showSize = settings.showVideoSize,
+                showFps = settings.showVideoFps,
+                showNewTag = settings.showNewBadge
+            )
+        )
+    }
     var showViewSortDialog by remember { mutableStateOf(false) }
 
     var isSearchActive by remember { mutableStateOf(false) }
@@ -181,6 +189,7 @@ fun RinoxAppContent(
             if (folders.isEmpty() && allVideos.isEmpty()) isLoading = true
             val (loadedFolders, loadedVideos) = repository.loadAllMedia(
                 settings = settings,
+                settingsManager = settingsManager,
                 viewMode = viewMode,
                 sortOption = sortOption,
                 sortDirection = sortDirection
@@ -568,8 +577,9 @@ fun RinoxAppContent(
                                             }
                                         },
                                         onHideFolder = {
-                                            settingsManager.addExcludedFolder(folder.path)
+                                            settingsManager.toggleExcludedFolder(folder.path)
                                             Toast.makeText(context, "Folder hidden", Toast.LENGTH_SHORT).show()
+                                            refreshMedia()
                                         },
                                         onProperties = { folderProperties = folder },
                                         onDeleteFolder = { folderToDelete = folder }
@@ -648,8 +658,9 @@ fun RinoxAppContent(
                     SettingsScreen(
                         settings = settings,
                         settingsManager = settingsManager,
-                        isDark = isDark,
-                        accentColor = accentColor
+                        accentColor = accentColor,
+                        onUpdateSettings = onSettingsUpdated,
+                        onRescanFolders = { refreshMedia() }
                     )
                 }
             }
@@ -670,6 +681,14 @@ fun RinoxAppContent(
                 sortOption = sOpt
                 sortDirection = sDir
                 cardFields = flds
+                onSettingsUpdated(
+                    settings.copy(
+                        isGridView = lMode == BrowserLayoutMode.GRID,
+                        showVideoSize = flds.showSize,
+                        showVideoFps = flds.showFps,
+                        showNewBadge = flds.showNewTag
+                    )
+                )
             }
         )
     }
