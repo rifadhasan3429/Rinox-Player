@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val settingsManager = remember { SettingsManager(context) }
-            var settings by remember { mutableStateOf(settingsManager.loadSettings()) }
+            var settings: AppSettings by remember { mutableStateOf(settingsManager.loadSettings()) }
 
             val isDark = settings.isDarkTheme
             val accentColor = when (settings.accentIndex) {
@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
                     RinoxAppContent(
                         settingsManager = settingsManager,
                         settings = settings,
-                        onSettingsUpdated = { updated ->
+                        onSettingsUpdated = { updated: AppSettings ->
                             settings = updated
                             settingsManager.saveSettings(updated)
                         },
