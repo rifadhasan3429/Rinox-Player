@@ -96,8 +96,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // 100% Google Official Maven Central Media3 Engine
-    val media3Version = "1.4.1"
+    // Google Official Maven Central Media3 Engine (Matched with NextLib 1.7.1-0.9.0)
+    val media3Version = "1.7.1"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
@@ -106,5 +106,5 @@ dependencies {
     implementation("androidx.media3:media3-session:$media3Version")
 
     // NextLib Full FFmpeg Video + Audio Decoder (10-bit HEVC/MKV & AC3/EAC3/DTS)
-    implementation("io.github.anilbeesetti:nextlib-media3ext:0.8.4")
+    implementation("io.github.anilbeesetti:nextlib-media3ext:1.7.1-0.9.0")
 }
